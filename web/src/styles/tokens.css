@@ -1,0 +1,234 @@
+/*
+ * The token layer. Chap's two skins are two sets of values for these variables —
+ * not two component trees.
+ *
+ * Read docs/skins.md before changing anything here.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Tailwind reads its theme from --skin-*.
+ *
+ * `@theme inline` is load-bearing. It makes generated utilities emit
+ * `var(--skin-x)` rather than resolving the value at build time. WITHOUT
+ * `inline`, runtime skin switching does not work at all — every utility would be
+ * frozen to whichever skin happened to compile first.
+ * ------------------------------------------------------------------------- */
+
+@theme inline {
+  --color-bg: var(--skin-bg);
+  --color-surface: var(--skin-surface);
+  --color-raised: var(--skin-raised);
+  --color-sunken: var(--skin-sunken);
+  --color-line: var(--skin-line);
+  --color-ink: var(--skin-ink);
+  --color-muted: var(--skin-muted);
+  --color-faint: var(--skin-faint);
+  --color-accent: var(--skin-accent);
+  --color-accent-2: var(--skin-accent-2);
+  --color-ok: var(--skin-ok);
+  --color-warn: var(--skin-warn);
+  --color-danger: var(--skin-danger);
+
+  --radius-panel: var(--skin-radius-panel);
+  --radius-control: var(--skin-radius-control);
+
+  --font-sans: var(--skin-font-sans);
+  --font-mono: var(--skin-font-mono);
+
+  /*
+   * Tailwind v4 derives its entire numeric spacing scale from this one value:
+   * `p-4` is calc(var(--spacing) * 4). Changing it rescales every padding, gap,
+   * margin and inset in the application at once. This single token does most of
+   * the work of "dense instrument panel" versus "spacious showroom".
+   */
+  --spacing: var(--skin-step);
+
+  --ease-skin: var(--skin-ease);
+}
+
+/* Per-skin escape hatches. Budget: under 25 usages app-wide (CI counts them). */
+@custom-variant bench (&:where([data-skin='bench'] *));
+@custom-variant showroom (&:where([data-skin='showroom'] *));
+
+/* ---------------------------------------------------------------------------
+ * BENCH — instrument panel. Dense, matte, one accent, tabular numerals,
+ * instant transitions. Built to be read, not admired.
+ * ------------------------------------------------------------------------- */
+
+:root[data-skin='bench'] {
+  /* surface & depth */
+  --skin-bg: oklch(0.16 0.008 260);
+  --skin-bg-image: none;
+  --skin-surface: oklch(0.19 0.008 260);
+  --skin-raised: oklch(0.23 0.008 260);
+  --skin-sunken: oklch(0.13 0.008 260);
+  --skin-blur: 0px;
+  --skin-shadow: inset 0 1px 0 oklch(1 0 0 / 0.04);
+  --skin-shadow-lift: none;
+  --skin-border-width: 1px;
+  --skin-line: oklch(0.28 0.008 260);
+  --skin-grid-line: oklch(0.24 0.008 260);
+
+  /* geometry */
+  --skin-radius-panel: 2px;
+  --skin-radius-control: 2px;
+  --skin-step: 0.2rem;
+  --skin-panel-pad: calc(var(--skin-step) * 3);
+  --skin-row-height: 1.6rem;
+
+  /* type */
+  --skin-font-sans: 'Inter Tight Variable', 'Inter Variable', system-ui, sans-serif;
+  --skin-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', monospace;
+  --skin-numeric: tabular-nums slashed-zero;
+  --skin-label-transform: uppercase;
+  --skin-label-tracking: 0.09em;
+  --skin-label-size: 0.6875rem;
+  --skin-label-weight: 500;
+
+  /* ink */
+  --skin-ink: oklch(0.93 0.005 260);
+  --skin-muted: oklch(0.68 0.006 260);
+  --skin-faint: oklch(0.48 0.006 260);
+
+  /* one accent — amber, the colour of an instrument backlight */
+  --skin-accent: oklch(0.8 0.15 78);
+  --skin-accent-2: oklch(0.8 0.15 78);
+  --skin-accent-wash: oklch(0.8 0.15 78 / 0.1);
+  --skin-ok: oklch(0.75 0.1 150);
+  --skin-warn: oklch(0.8 0.13 85);
+  --skin-danger: oklch(0.66 0.17 25);
+
+  /* message geometry — transcript rows, not bubbles */
+  --skin-msg-bg: transparent;
+  --skin-msg-radius: 0px;
+  --skin-msg-pad: calc(var(--skin-step) * 2) 0;
+  --skin-msg-width: 100%;
+  --skin-msg-align: stretch;
+  --skin-gutter-display: block;
+  --skin-gutter-width: 5.5rem;
+
+  /* layout */
+  --skin-rail-display: flex;
+  --skin-rail-width: 21rem;
+
+  /* motion — instrument snap; decorative animation off */
+  --skin-fast: 80ms;
+  --skin-base: 120ms;
+  --skin-ease: linear;
+  --skin-motion-scale: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * SHOWROOM — layered glass over a slow gradient. Spacious, translucent,
+ * two-tone, proportional numerals, everything eased.
+ * ------------------------------------------------------------------------- */
+
+:root[data-skin='showroom'] {
+  --skin-bg: oklch(0.19 0.03 275);
+  --skin-bg-image:
+    radial-gradient(70rem 45rem at 8% -12%, oklch(0.5 0.17 292 / 0.42), transparent 62%),
+    radial-gradient(55rem 38rem at 96% 6%, oklch(0.58 0.14 205 / 0.34), transparent 60%),
+    radial-gradient(50rem 40rem at 50% 108%, oklch(0.46 0.15 330 / 0.28), transparent 58%);
+  --skin-surface: oklch(1 0 0 / 0.055);
+  --skin-raised: oklch(1 0 0 / 0.1);
+  --skin-sunken: oklch(0 0 0 / 0.18);
+  --skin-blur: 22px;
+  --skin-shadow: inset 0 1px 0 oklch(1 0 0 / 0.12);
+  --skin-shadow-lift: 0 24px 60px -24px oklch(0 0 0 / 0.6);
+  --skin-border-width: 1px;
+  --skin-line: oklch(1 0 0 / 0.13);
+  --skin-grid-line: transparent;
+
+  --skin-radius-panel: 20px;
+  --skin-radius-control: 12px;
+  --skin-step: 0.3rem;
+  --skin-panel-pad: calc(var(--skin-step) * 6);
+  --skin-row-height: 2.4rem;
+
+  --skin-font-sans: 'Inter Variable', system-ui, sans-serif;
+  --skin-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', monospace;
+  --skin-numeric: proportional-nums;
+  --skin-label-transform: none;
+  --skin-label-tracking: 0;
+  --skin-label-size: 0.8125rem;
+  --skin-label-weight: 450;
+
+  --skin-ink: oklch(0.97 0.005 275);
+  --skin-muted: oklch(0.79 0.02 275);
+  --skin-faint: oklch(0.62 0.025 275);
+
+  --skin-accent: oklch(0.75 0.16 300);
+  --skin-accent-2: oklch(0.79 0.13 208);
+  --skin-accent-wash: oklch(0.75 0.16 300 / 0.16);
+  --skin-ok: oklch(0.82 0.14 160);
+  --skin-warn: oklch(0.85 0.14 88);
+  --skin-danger: oklch(0.71 0.19 20);
+
+  --skin-msg-bg: var(--skin-surface);
+  --skin-msg-radius: 18px;
+  --skin-msg-pad: calc(var(--skin-step) * 4) calc(var(--skin-step) * 5);
+  --skin-msg-width: 44rem;
+  --skin-msg-align: center;
+  --skin-gutter-display: none;
+  --skin-gutter-width: 0rem;
+
+  --skin-rail-display: none;
+  --skin-rail-width: 0rem;
+
+  --skin-fast: 180ms;
+  --skin-base: 320ms;
+  --skin-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --skin-motion-scale: 1;
+}
+
+/* ---------------------------------------------------------------------------
+ * Base
+ * ------------------------------------------------------------------------- */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--skin-bg);
+  background-image: var(--skin-bg-image);
+  background-attachment: fixed;
+  color: var(--skin-ink);
+  font-family: var(--skin-font-sans);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Switching skins animates the properties that differ, so the morph between the
+ * two aesthetics is itself the demo. Only applied during the switch — a
+ * permanent global transition would make every interaction feel laggy.
+ */
+:root[data-skin-transitioning] * {
+  transition:
+    background-color var(--skin-base) var(--skin-ease),
+    border-color var(--skin-base) var(--skin-ease),
+    border-radius var(--skin-base) var(--skin-ease),
+    color var(--skin-base) var(--skin-ease),
+    padding var(--skin-base) var(--skin-ease),
+    box-shadow var(--skin-base) var(--skin-ease),
+    backdrop-filter var(--skin-base) var(--skin-ease) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --skin-motion-scale: 0;
+  }
+  :root[data-skin-transitioning] * {
+    transition: none !important;
+  }
+}
+
+::selection {
+  background: var(--skin-accent-wash);
+}

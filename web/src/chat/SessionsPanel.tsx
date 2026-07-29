@@ -1,0 +1,218 @@
+/**
+ * Sessions — LewLM's conversation memory.
+ *
+ * The point worth demonstrating here is `context_policy`. LewLM decides what
+ * history a turn actually sees, so switching a session from `full_history` to
+ * `last_turn` visibly changes the compiled prompt without Chap touching a single
+ * message. Turn on the prompt trace and switch the policy: the `messages` count
+ * in the trace changes and Chap sent identical requests.
+ *
+ * When a session is attached, Chap stops sending its own transcript — history
+ * becomes LewLM's job, which is the whole reason sessions exist.
+ */
+
+import { useState } from 'react';
+
+import type { SessionListResponse, SessionRecord, SessionContextPolicy } from '@chap/lewlm';
+
+import { Labelled } from '../components/Field.tsx';
+import { lewlm } from '../lib/client.ts';
+import { usePolled } from '../lib/usePolled.ts';
+
+const POLICIES: SessionContextPolicy[] = ['full_history', 'last_turn', 'summary_and_last_turn'];
+
+interface Props {
+  /** The attached session, or null when Chap is sending its own transcript. */
+  sessionId: string | null;
+  onAttach: (sessionId: string | null) => void;
+}
+
+export function SessionsPanel({ sessionId, onAttach }: Props) {
+  const { data, refresh } = usePolled<SessionListResponse>('/v1/sessions');
+  const [title, setTitle] = useState('');
+  const [policy, setPolicy] = useState<SessionContextPolicy>('full_history');
+  const [busy, setBusy] = useState(false);
+
+  const sessions = data?.items ?? [];
+
+  const act = async (work: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await work();
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <Labelled label="new session title">
+          <input
+            className="field w-56"
+            value={title}
+            placeholder="untitled"
+            onChange={(event) => setTitle(event.target.value)}
+          />
+        </Labelled>
+
+        <Labelled label="context policy">
+          <select
+            className="field"
+            value={policy}
+            onChange={(event) => setPolicy(event.target.value as SessionContextPolicy)}
+          >
+            {POLICIES.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </Labelled>
+
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={() =>
+            void act(async () => {
+              const created = await lewlm.request<SessionRecord>('POST', '/v1/sessions', {
+                json: { title: title || null, context_policy: policy },
+              });
+              setTitle('');
+              onAttach(created.session_id);
+            })
+          }
+        >
+          create + attach
+        </button>
+
+        {sessionId && (
+          <button type="button" className="btn" onClick={() => onAttach(null)}>
+            detach
+          </button>
+        )}
+      </div>
+
+      {sessions.length === 0 && (
+        <p className="micro-label">
+          no sessions — Chap is sending its own transcript as `messages`
+        </p>
+      )}
+
+      <div className="flex flex-col">
+        {sessions.map((session) => (
+          <SessionRow
+            key={session.session_id}
+            session={session}
+            attached={session.session_id === sessionId}
+            busy={busy}
+            onAttach={() => onAttach(session.session_id)}
+            onAct={act}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SessionRow({
+  session,
+  attached,
+  busy,
+  onAttach,
+  onAct,
+}: {
+  session: SessionRecord;
+  attached: boolean;
+  busy: boolean;
+  onAttach: () => void;
+  onAct: (work: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState(session.title ?? '');
+
+  const patch = (body: Record<string, unknown>) =>
+    onAct(() =>
+      lewlm.request('PATCH', `/v1/sessions/${session.session_id}`, { json: body }),
+    );
+
+  return (
+    <div className="row flex flex-wrap items-center gap-3 py-2">
+      <button
+        type="button"
+        className="chip"
+        aria-pressed={attached}
+        onClick={onAttach}
+        title={session.session_id}
+      >
+        {attached ? 'attached' : 'attach'}
+      </button>
+
+      {renaming ? (
+        <input
+          className="field w-56"
+          autoFocus
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              setRenaming(false);
+              void patch({ title: draft || null });
+            }
+            if (event.key === 'Escape') setRenaming(false);
+          }}
+          onBlur={() => setRenaming(false)}
+        />
+      ) : (
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left text-sm"
+          onDoubleClick={() => setRenaming(true)}
+          onClick={() => setRenaming(true)}
+        >
+          {session.title || <span style={{ color: 'var(--skin-faint)' }}>untitled</span>}
+        </button>
+      )}
+
+      {/* Changing this re-compiles the prompt on the next turn. Nothing in Chap
+          changes; LewLM decides what the model sees. */}
+      <select
+        className="field text-xs"
+        value={session.context_policy}
+        disabled={busy}
+        onChange={(event) => void patch({ context_policy: event.target.value })}
+      >
+        {POLICIES.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+
+      <span className="numeric" style={{ color: 'var(--skin-faint)' }}>
+        {session.turn_count} turns · {session.message_count} msgs
+      </span>
+
+      <a
+        className="chip"
+        href={`/v1/sessions/${session.session_id}/export`}
+        download={`${session.session_id}.json`}
+      >
+        export
+      </a>
+
+      <button
+        type="button"
+        className="chip"
+        disabled={busy}
+        onClick={() =>
+          void onAct(() => lewlm.request('DELETE', `/v1/sessions/${session.session_id}`))
+        }
+      >
+        delete
+      </button>
+    </div>
+  );
+}

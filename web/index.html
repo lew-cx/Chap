@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" data-skin="bench">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chap</title>
+    <script>
+      // Resolve the skin before first paint so switching never flashes.
+      // Query param wins so a link can be shared in a chosen skin.
+      (function () {
+        try {
+          var q = new URLSearchParams(location.search).get('skin');
+          var skin = q || localStorage.getItem('chap.skin') || 'bench';
+          if (skin !== 'bench' && skin !== 'showroom') skin = 'bench';
+          document.documentElement.dataset.skin = skin;
+        } catch (_) {
+          document.documentElement.dataset.skin = 'bench';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

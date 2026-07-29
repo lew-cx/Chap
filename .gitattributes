@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Generated from LewLM's published contract by `npm run gen:types`.
+# Checked in deliberately: the diff is the record of contract drift.
+packages/lewlm/src/generated/** linguist-generated=true
+vendor/openapi.json linguist-generated=true

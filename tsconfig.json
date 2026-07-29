@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/lewlm" },
+    { "path": "./server" },
+    { "path": "./web" }
+  ]
+}

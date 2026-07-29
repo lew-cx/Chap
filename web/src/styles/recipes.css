@@ -1,0 +1,335 @@
+/*
+ * Recipes — the vocabulary components use instead of skin conditionals.
+ *
+ * Every rule reads only from --skin-*, so a component that writes
+ * `className="panel"` renders as a matte 2px-radius card in Bench and a
+ * blurred 20px-radius glass card in Showroom. Same DOM, same JSX, no branch.
+ *
+ * If you find yourself wanting a skin conditional in a component, the answer is
+ * almost always a new token plus a recipe here.
+ */
+
+@utility panel {
+  background-color: var(--skin-surface);
+  border: var(--skin-border-width) solid var(--skin-line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--skin-shadow), var(--skin-shadow-lift);
+  backdrop-filter: blur(var(--skin-blur));
+  padding: var(--skin-panel-pad);
+}
+
+/* A panel that supplies its own padding. */
+@utility panel-bare {
+  background-color: var(--skin-surface);
+  border: var(--skin-border-width) solid var(--skin-line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--skin-shadow), var(--skin-shadow-lift);
+  backdrop-filter: blur(var(--skin-blur));
+}
+
+/* Numbers that must line up column to column in Bench, and read naturally in Showroom. */
+@utility numeric {
+  font-family: var(--skin-font-mono);
+  font-variant-numeric: var(--skin-numeric);
+  font-size: 0.8125rem;
+}
+
+/* Section and field labels. Shouty and tracked in Bench; plain in Showroom. */
+@utility micro-label {
+  color: var(--skin-muted);
+  font-size: var(--skin-label-size);
+  font-weight: var(--skin-label-weight);
+  letter-spacing: var(--skin-label-tracking);
+  text-transform: var(--skin-label-transform);
+}
+
+/* A row in a dense table. Grid lines vanish in Showroom. */
+@utility row {
+  min-height: var(--skin-row-height);
+  border-bottom: 1px solid var(--skin-grid-line);
+}
+
+/*
+ * A chat message. Transcript row in Bench, floating bubble in Showroom —
+ * from tokens alone.
+ */
+@utility bubble {
+  background-color: var(--skin-msg-bg);
+  border-radius: var(--skin-msg-radius);
+  padding: var(--skin-msg-pad);
+  max-width: var(--skin-msg-width);
+}
+
+/* The mono metadata column beside a Bench message. Hidden in Showroom. */
+@utility gutter {
+  display: var(--skin-gutter-display);
+  flex: 0 0 var(--skin-gutter-width);
+  width: var(--skin-gutter-width);
+  color: var(--skin-faint);
+  font-family: var(--skin-font-mono);
+  font-size: 0.6875rem;
+}
+
+/* The telemetry rail slot. Present in Bench, collapsed in Showroom. */
+@utility rail-slot {
+  display: var(--skin-rail-display);
+  flex: 0 0 var(--skin-rail-width);
+  width: var(--skin-rail-width);
+  overflow: hidden;
+}
+
+@utility field {
+  background-color: var(--skin-sunken);
+  border: var(--skin-border-width) solid var(--skin-line);
+  border-radius: var(--radius-control);
+  color: var(--skin-ink);
+  font-family: inherit;
+  font-size: inherit;
+  padding: calc(var(--skin-step) * 2) calc(var(--skin-step) * 3);
+  outline: none;
+  transition: border-color var(--skin-fast) var(--skin-ease);
+}
+@utility field {
+  &:focus-visible {
+    border-color: var(--skin-accent);
+  }
+}
+
+@utility btn {
+  background-color: var(--skin-raised);
+  border: var(--skin-border-width) solid var(--skin-line);
+  border-radius: var(--radius-control);
+  color: var(--skin-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  padding: calc(var(--skin-step) * 2) calc(var(--skin-step) * 4);
+  transition:
+    background-color var(--skin-fast) var(--skin-ease),
+    border-color var(--skin-fast) var(--skin-ease);
+}
+@utility btn {
+  &:hover:not(:disabled) {
+    border-color: var(--skin-accent);
+  }
+  &:disabled {
+    color: var(--skin-faint);
+    cursor: not-allowed;
+  }
+}
+
+@utility btn-accent {
+  background-color: var(--skin-accent);
+  border: var(--skin-border-width) solid transparent;
+  border-radius: var(--radius-control);
+  color: oklch(0.16 0.01 260);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: calc(var(--skin-step) * 2) calc(var(--skin-step) * 4);
+  transition: opacity var(--skin-fast) var(--skin-ease);
+}
+@utility btn-accent {
+  &:hover:not(:disabled) {
+    opacity: 0.88;
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+}
+
+/* A monospace payload block: request bodies, traces, schemas. */
+@utility code {
+  background-color: var(--skin-sunken);
+  border: var(--skin-border-width) solid var(--skin-line);
+  border-radius: var(--radius-control);
+  font-family: var(--skin-font-mono);
+  font-size: 0.75rem;
+  line-height: 1.55;
+  padding: calc(var(--skin-step) * 2) calc(var(--skin-step) * 3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/*
+ * Rendered markdown — model output in a message bubble.
+ *
+ * Every measurement is a multiple of --skin-step, so prose is as dense as the
+ * rest of one skin and as airy as the rest of the other from the same markup.
+ * Nothing here sets a font size in absolute terms except the headings, which
+ * are deliberately restrained: a chat reply is not a document.
+ */
+@utility prose {
+  /* The bubble sets pre-wrap for plain text; parsed blocks manage their own. */
+  white-space: normal;
+
+  & > * + * {
+    margin-top: calc(var(--skin-step) * 3);
+  }
+
+  /* A soft break inside a paragraph is a line break, as it is in the source. */
+  & p,
+  & blockquote {
+    white-space: pre-wrap;
+  }
+
+  & h1,
+  & h2,
+  & h3,
+  & h4,
+  & h5,
+  & h6 {
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  & * + h1,
+  & * + h2,
+  & * + h3 {
+    margin-top: calc(var(--skin-step) * 5);
+  }
+  & h1 {
+    font-size: 1.25rem;
+  }
+  & h2 {
+    font-size: 1.125rem;
+  }
+  & h3 {
+    font-size: 1rem;
+  }
+  & h4,
+  & h5,
+  & h6 {
+    color: var(--skin-muted);
+    font-size: 0.9375rem;
+  }
+
+  & ul,
+  & ol {
+    padding-left: calc(var(--skin-step) * 6);
+  }
+  & ul {
+    list-style: disc;
+  }
+  & ol {
+    list-style: decimal;
+  }
+  & li {
+    margin-top: calc(var(--skin-step) * 1);
+  }
+  & li::marker {
+    color: var(--skin-faint);
+  }
+  & li > ul,
+  & li > ol {
+    margin-top: calc(var(--skin-step) * 1);
+  }
+
+  & a {
+    color: var(--skin-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  & blockquote {
+    border-left: 2px solid var(--skin-line);
+    color: var(--skin-muted);
+    padding-left: calc(var(--skin-step) * 3);
+  }
+
+  /* Inline code. Block code wears the `code` recipe and opts back out here. */
+  & code {
+    background-color: var(--skin-sunken);
+    border-radius: var(--radius-control);
+    font-family: var(--skin-font-mono);
+    font-size: 0.85em;
+    padding: 0 0.3em;
+  }
+  & pre code {
+    background: none;
+    font-size: inherit;
+    padding: 0;
+  }
+
+  & table {
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  & th,
+  & td {
+    padding: calc(var(--skin-step) * 1) calc(var(--skin-step) * 3);
+    text-align: left;
+    vertical-align: top;
+  }
+  & th {
+    border-bottom: 1px solid var(--skin-line);
+    color: var(--skin-muted);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  /* Body rules use the grid-line token, so they fade with every other grid. */
+  & tbody tr + tr td {
+    border-top: 1px solid var(--skin-grid-line);
+  }
+}
+
+/* A compact toggle. `aria-pressed` carries the state, so no class juggling. */
+@utility chip {
+  background-color: transparent;
+  border: var(--skin-border-width) solid var(--skin-line);
+  border-radius: var(--radius-control);
+  color: var(--skin-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+  padding: calc(var(--skin-step) * 1) calc(var(--skin-step) * 3);
+  transition:
+    color var(--skin-fast) var(--skin-ease),
+    border-color var(--skin-fast) var(--skin-ease);
+}
+@utility chip {
+  &:hover {
+    color: var(--skin-ink);
+  }
+  &[aria-pressed='true'] {
+    border-color: var(--skin-accent);
+    color: var(--skin-accent);
+  }
+}
+
+@utility hairline {
+  border-color: var(--skin-line);
+}
+
+/* A status dot. Colour comes from the caller via `color`. */
+@utility dot {
+  background-color: currentColor;
+  border-radius: 9999px;
+  display: inline-block;
+  height: 0.4375rem;
+  width: 0.4375rem;
+}
+
+/* A thin scrollbar that does not fight either skin. */
+@utility scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--skin-line) transparent;
+}
+
+/*
+ * Decorative motion. Bench sets --skin-motion-scale to 0, which collapses the
+ * duration to zero and effectively disables the animation — no JS, no branch.
+ */
+@utility drift {
+  animation: chap-drift calc(24s * var(--skin-motion-scale)) ease-in-out infinite alternate;
+}
+
+@keyframes chap-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(2%, -1.5%, 0) scale(1.06);
+  }
+}
