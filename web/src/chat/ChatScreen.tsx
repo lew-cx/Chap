@@ -32,6 +32,7 @@ import { Labelled, Stat } from '../components/Field.tsx';
 import { Markdown } from '../components/Markdown.tsx';
 import { lewlm } from '../lib/client.ts';
 import { useModels } from '../lib/useModels.ts';
+import { useSpeech } from '../lib/useSpeech.ts';
 import { useStructuredSupport } from '../lib/useStructuredSupport.ts';
 import { useTokenCount } from '../lib/useTokenCount.ts';
 import { useGrounding } from '../store/grounding.ts';
@@ -41,6 +42,7 @@ import { Message } from './Message.tsx';
 import { RunInspectors, type RunResult } from './RunInspectors.tsx';
 import { SessionsPanel } from './SessionsPanel.tsx';
 import { SamplingPanel } from './SamplingPanel.tsx';
+import { SpeechPanel } from './SpeechPanel.tsx';
 import {
   buildRequest,
   INITIAL_FORMAT,
@@ -50,7 +52,7 @@ import {
 } from './request.ts';
 
 const VISIBILITIES: ReasoningVisibility[] = ['hidden', 'summarized', 'raw_model_emitted'];
-type Drawer = 'sampling' | 'context' | 'format' | 'system' | 'sessions' | null;
+type Drawer = 'sampling' | 'context' | 'format' | 'system' | 'sessions' | 'speech' | null;
 
 interface Turn {
   role: 'user' | 'assistant';
@@ -123,6 +125,7 @@ export function ChatScreen() {
   const bottom = useRef<HTMLDivElement>(null);
   const promptTokens = useTokenCount(prompt, state.model);
   const structuredSupport = useStructuredSupport(state.model);
+  const speech = useSpeech();
 
   const set = <K extends keyof ComposerState>(key: K, value: ComposerState[K]) =>
     setState((current) => ({ ...current, [key]: value }));
@@ -168,6 +171,12 @@ export function ChatScreen() {
     const built = buildRequest(state, history, text, attachments);
     const files = attachments.map((attachment) => attachment.file.name);
 
+    // One turn can be many requests once it is spoken — the generation plus a
+    // synthesis per sentence. They share a correlation id so LewLM's event
+    // stream shows them as one exchange rather than a dozen unrelated calls.
+    const correlationId = crypto.randomUUID();
+    speech.begin(correlationId);
+
     setPrompt('');
     setAttachments([]);
     setError(null);
@@ -187,6 +196,7 @@ export function ChatScreen() {
     try {
       const options = {
         signal: controller.signal,
+        correlationId,
         ...(built.uploads.length > 0 ? { form: buildMultipart(built.uploads) } : {}),
       };
       const stream =
@@ -203,6 +213,9 @@ export function ChatScreen() {
           case 'text':
             assembled += event.delta;
             patch({ text: assembled });
+            // Sentences are spoken as they close, so the first one plays while
+            // the rest of the reply is still being generated.
+            speech.push(event.delta);
             break;
           case 'reasoning':
             // Replace, never append — LewLM sends the whole object per token.
@@ -226,7 +239,11 @@ export function ChatScreen() {
             break;
         }
       }
+      // The trailing fragment — the last sentence often has no terminator.
+      speech.end();
     } catch (cause) {
+      // Both paths abandon the reply, so nothing should keep reading it out.
+      speech.cancel();
       if (isAbort(cause)) return;
       const failure = cause as LewLMApiError;
       setError(failure);
@@ -411,13 +428,26 @@ export function ChatScreen() {
             onClick={() => set('includePromptTrace', !state.includePromptTrace)}
           />
 
+          {/* Speaking needs no LewLM change beyond a synthesis model existing:
+              the reply is cut into sentences here and each one is synthesized as
+              it closes. */}
+          <Toggle
+            label={speech.status.finished ? 'speak' : `speak · ${speech.status.spoken}`}
+            on={speech.armed}
+            flagged={speech.error != null}
+            onClick={() => speech.setEnabled(!speech.enabled)}
+          />
+
           <span className="hairline mx-1 h-4 border-l" />
 
-          {(['sampling', 'context', 'format', 'system', 'sessions'] as const).map((panel) => (
+          {(['sampling', 'context', 'format', 'system', 'sessions', 'speech'] as const).map((panel) => (
             <Toggle
               key={panel}
               label={panel}
-              flagged={panel === 'format' && formatError != null}
+              flagged={
+                (panel === 'format' && formatError != null) ||
+                (panel === 'speech' && speech.error != null)
+              }
               on={drawer === panel || (panel === 'sessions' && state.sessionId != null)}
               onClick={() => setDrawer(drawer === panel ? null : panel)}
             />
@@ -496,6 +526,7 @@ export function ChatScreen() {
                 }}
               />
             )}
+            {drawer === 'speech' && <SpeechPanel speech={speech} />}
             {drawer === 'system' && (
               <Labelled label="system_prompt">
                 <textarea
@@ -529,7 +560,16 @@ export function ChatScreen() {
               {promptTokens == null ? ' ' : `${promptTokens} tok +`}
             </span>
             {streaming ? (
-              <button type="button" className="btn" onClick={() => abort.current?.abort()}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  abort.current?.abort();
+                  // Stop means stop: silence the clips already scheduled, not
+                  // just the ones not yet synthesized.
+                  speech.cancel();
+                }}
+              >
                 Stop
               </button>
             ) : (
