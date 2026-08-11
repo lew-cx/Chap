@@ -142,11 +142,7 @@ export function Jobs() {
       </Section>
 
       <Section title="autotune">
-        {/*
-         * Produces the serving profile the chat screen applies. There is no
-         * endpoint to list stored profiles (docs/lewlm-gaps.md#g19), so what you
-         * see here is the recommendation from this run and nothing else.
-         */}
+        {/* Produces a serving-profile recommendation the chat screen can apply. */}
         <button
           type="button"
           className="btn"
@@ -172,7 +168,7 @@ export function Jobs() {
           </div>
         ) : (
           <p className="micro-label mt-2">
-            no stored-profile listing exists — docs/lewlm-gaps.md#g19
+            run autotune to inspect a recommendation for the selected model
           </p>
         )}
       </Section>

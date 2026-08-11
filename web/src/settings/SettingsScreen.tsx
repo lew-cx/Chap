@@ -136,22 +136,16 @@ const OPEN_GAPS: { id: string; title: string; effect: string }[] = [
       'Every token.delta of every request reaches the browser and is filtered here. Chap absorbs it with a 5,000-entry ring, a throttled flush and a virtualized list; a reconnect leaves an explicit gap marker because the window cannot be recovered. The one open gap that costs Chap real code.',
   },
   {
-    id: 'G24',
-    title: 'models/scan rewrites the registry and reports no change',
+    id: 'G29',
+    title: 'streamed text is correct but not incremental on the MLX runtime',
     effect:
-      'The rescan button on the Models tab carries a warning instead of being routine. Discovery does not recognize its own conversion output, so a scan has demoted converted MLX bundles to requires_conversion while reporting updated_count: 0.',
-  },
-  {
-    id: 'G19',
-    title: 'no serving-profile listing',
-    effect:
-      'Ops can show the profile a run applied and the recommendation autotune just produced, but not what profiles exist — so the tuning loop has no memory in the UI.',
+      'On some prompts the whole reply arrives as a single delta, so time-to-first-token equals time-to-last-token. Streaming is honoured as a transport but not as a behaviour. Chap reports it rather than hiding it with model-specific routing — it is also why spoken replies lose their head start on that path.',
   },
 ];
 
 function Gaps() {
   return (
-    <Section title="open gaps" hint={`${OPEN_GAPS.length} open · 11 fixed upstream`}>
+    <Section title="open gaps" hint={`${OPEN_GAPS.length} open · 15 fixed upstream`}>
       <div className="flex flex-col gap-2">
         {OPEN_GAPS.map((gap) => (
           <Disclosure key={gap.id} label={gap.id} hint={gap.title}>
@@ -162,10 +156,9 @@ function Gaps() {
         ))}
       </div>
       <p className="micro-label mt-3">
-        Every other entry this project has raised is closed — 19 checks pass and
-        11 gaps have been fixed upstream. Each open gap has a probe in `npm run
-        proof` that flips from gap to FIXD when LewLM gains the capability, except
-        G24, which cannot be probed without mutating the registry. Full detail in
+        The live proof currently passes 23 checks and confirms the runtime-specific
+        gaps it can exercise. G13 is tracked structurally because replay cannot be
+        proved from an endpoint that does not offer it. Full detail is in
         docs/lewlm-gaps.md.
       </p>
     </Section>

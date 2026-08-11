@@ -120,18 +120,6 @@ export function Models() {
       )}
 
       <Section title="registry scan">
-        {/*
-         * A scan is not safely idempotent on this build — it rewrites manifests
-         * while reporting `updated_count: 0`, and it has demoted converted MLX
-         * bundles to `requires_conversion`. See docs/lewlm-gaps.md#g24. The
-         * button stays, because a bench should be able to do the dangerous thing
-         * deliberately; the warning stays with it.
-         */}
-        <p className="mb-2 text-sm" style={{ color: 'var(--skin-warn)' }}>
-          A scan rewrites the registry. On this build it has reclassified converted
-          MLX bundles as <span className="numeric">requires_conversion</span> and
-          reported no change while doing so — docs/lewlm-gaps.md#g24.
-        </p>
         <button
           type="button"
           className="btn"
