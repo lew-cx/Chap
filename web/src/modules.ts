@@ -15,6 +15,7 @@
 import { createElement, type ComponentType } from 'react';
 
 import { collections } from '@chap/module-collections/web';
+import { docktizo } from '@chap/module-docktizo/web';
 
 import { ModuleGate } from './components/ModuleGate.tsx';
 import type { ScreenTab } from './components/Screen.tsx';
@@ -32,7 +33,7 @@ export interface WebModule {
 }
 
 /** The registry. One line per module. */
-export const MODULES: WebModule[] = [collections];
+export const MODULES: WebModule[] = [collections, docktizo];
 
 /**
  * Wrap once, here at module scope. Building the wrapper inside `moduleTabs()`

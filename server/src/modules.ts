@@ -17,6 +17,7 @@
 import type { Hono } from 'hono';
 
 import { collectionsModule } from '@chap/module-collections/server';
+import { docktizo } from '@chap/module-docktizo/server';
 
 import type { PipeTarget } from './proxy.ts';
 
@@ -58,4 +59,4 @@ export interface ServerModule {
 export type ServerModuleFactory = (context: ModuleContext) => ServerModule;
 
 /** The registry. One line per module; core mentions modules nowhere else. */
-export const MODULES: ServerModuleFactory[] = [collectionsModule];
+export const MODULES: ServerModuleFactory[] = [collectionsModule, docktizo];

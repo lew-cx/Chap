@@ -1,0 +1,15 @@
+{
+  "name": "@chap/module-docktizo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "DocKtizo as a Chap module: sources, generations, revisions and artifacts.",
+  "exports": {
+    "./server": "./src/server.ts",
+    "./web": "./src/web.tsx"
+  },
+  "chap": {
+    "budget": 850
+  },
+  "dependencies": {}
+}

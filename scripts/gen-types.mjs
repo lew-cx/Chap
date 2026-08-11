@@ -16,11 +16,15 @@
  * supplies. So the two generators never overlap and nothing needs deduping.
  * If that ever stops being true, step 2's collision assertion fails loudly.
  *
+ * A second target exists for DocKtizo, which publishes no bundle and no
+ * committed spec at all — see the DocKtizo section below for what that costs.
+ *
  * Usage:
  *   node scripts/gen-types.mjs                       # OpenAPI from the LewLM venv
  *   node scripts/gen-types.mjs --openapi url         # ...from a running server
  *   node scripts/gen-types.mjs --openapi file        # ...from vendor/openapi.json
  *   node scripts/gen-types.mjs --check               # regenerate and diff; CI drift gate
+ *   node scripts/gen-types.mjs --target docktizo     # the DocKtizo module's types
  */
 
 import { execFile } from 'node:child_process';
@@ -86,8 +90,9 @@ const flag = (name, fallback) => {
   return i === -1 ? fallback : (args[i + 1] ?? fallback);
 };
 const CHECK = args.includes('--check');
+const TARGET = flag('target', 'lewlm');
 const OPENAPI_SOURCE = flag('openapi', 'venv');
-const BASE_URL = flag('base', 'http://127.0.0.1:8080');
+const BASE_URL = flag('base', TARGET === 'docktizo' ? 'http://127.0.0.1:8090' : 'http://127.0.0.1:8080');
 
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
@@ -357,45 +362,163 @@ async function generate() {
   };
 }
 
+// ---------------------------------------------------------------------------
+// DocKtizo
+// ---------------------------------------------------------------------------
+
+/**
+ * DocKtizo publishes nothing.
+ *
+ * No integration bundle, no committed spec, no client package — the OpenAPI
+ * document exists only inside a running FastAPI process. So this target is the
+ * LewLM one with everything the bundle bought taken away: no composed request
+ * shapes, no event-type catalogue, no error-code catalogue, no fixtures. What
+ * is left is routes and component schemas, which is enough to type a client and
+ * not enough to type a stream.
+ *
+ * That absence is the entire content of docs/docktizo-gaps.md D2, and the reason
+ * the module's hand-written line count is what it is.
+ *
+ * `create_app()` builds a database engine but never connects and binds no port,
+ * so the venv path works offline exactly as LewLM's does.
+ */
+const DOCKTIZO_HOME = process.env.DOCKTIZO_HOME ?? resolve(ROOT, '../DocKtizo');
+const DOCKTIZO_OUT = join(ROOT, 'packages/module-docktizo/src/generated');
+const DOCKTIZO_VENDOR = join(VENDOR, 'docktizo-openapi.json');
+
+const DOCKTIZO_BANNER = [
+  '/**',
+  ' * DO NOT EDIT.',
+  ' *',
+  ' * Generated from a running DocKtizo by `npm run gen:types -- --target docktizo`.',
+  ' * DocKtizo commits no spec, so this and vendor/docktizo-openapi.json are the',
+  ' * only checked-in record of its contract. See docs/docktizo-gaps.md, D2.',
+  ' */',
+  '',
+].join('\n');
+
+async function docktizoFromVenv() {
+  const python = join(DOCKTIZO_HOME, '.venv/bin/python');
+  if (!existsSync(python)) throw new Error(`no venv at ${python} (set DOCKTIZO_HOME)`);
+  const { stdout } = await execFileAsync(
+    python,
+    ['-c', 'import json,sys; from docktizo.api.app import create_app; json.dump(create_app().openapi(), sys.stdout)'],
+    { maxBuffer: 64 * 1024 * 1024, cwd: DOCKTIZO_HOME },
+  );
+  return stdout;
+}
+
+async function generateDocktizo() {
+  const attempts =
+    OPENAPI_SOURCE === 'file'
+      ? [['file', () => readFile(DOCKTIZO_VENDOR, 'utf8')]]
+      : OPENAPI_SOURCE === 'url'
+        ? [['url', async () => {
+            const res = await fetch(`${BASE_URL}/openapi.json`);
+            if (!res.ok) throw new Error(`GET ${BASE_URL}/openapi.json -> ${res.status}`);
+            return res.text();
+          }], ['file', () => readFile(DOCKTIZO_VENDOR, 'utf8')]]
+        : [['venv', docktizoFromVenv], ['file', () => readFile(DOCKTIZO_VENDOR, 'utf8')]];
+
+  const failures = [];
+  let openapiRaw = null;
+  for (const [name, load] of attempts) {
+    try {
+      openapiRaw = await load();
+      console.log(`  openapi   <- ${name}`);
+      break;
+    } catch (error) {
+      failures.push(`${name}: ${error.message}`);
+    }
+  }
+  if (openapiRaw == null) {
+    throw new Error(`could not resolve DocKtizo's OpenAPI.\n    ${failures.join('\n    ')}`);
+  }
+
+  const openapi = JSON.parse(openapiRaw);
+  assertResolvable(openapi);
+
+  const metaTs = [
+    DOCKTIZO_BANNER,
+    'export const DOCKTIZO_CONTRACT = {',
+    `  docktizoVersion: ${JSON.stringify(openapi.info?.version ?? 'unknown')},`,
+    `  routeCount: ${Object.keys(openapi.paths ?? {}).length},`,
+    `  componentCount: ${Object.keys(openapi.components?.schemas ?? {}).length},`,
+    `  openapiSha256: ${JSON.stringify(sha256(openapiRaw))},`,
+    `  generatedAt: ${JSON.stringify(new Date().toISOString())},`,
+    '} as const;',
+    '',
+  ].join('\n');
+
+  return {
+    out: DOCKTIZO_OUT,
+    vendorFile: DOCKTIZO_VENDOR,
+    files: {
+      'openapi.ts': DOCKTIZO_BANNER + astToString(await openapiTS(openapi)),
+      'meta.ts': metaTs,
+    },
+    fixtures: [],
+    openapiRaw,
+    stats: {
+      routes: Object.keys(openapi.paths ?? {}).length,
+      components: Object.keys(openapi.components?.schemas ?? {}).length,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
 /** `generatedAt` changes every run, so drift checks must ignore it. */
 const stripVolatile = (source) => source.replace(/^\s*generatedAt:.*$/m, '');
 
 async function main() {
-  console.log(CHECK ? 'gen:types --check' : 'gen:types');
-  const { files, fixtures, openapiRaw, stats } = await generate();
+  console.log(`${CHECK ? 'gen:types --check' : 'gen:types'}  (${TARGET})`);
+  const result =
+    TARGET === 'docktizo'
+      ? await generateDocktizo()
+      : { ...(await generate()), out: OUT, vendorFile: join(VENDOR, 'openapi.json') };
+  const { files, fixtures, openapiRaw, stats, out, vendorFile } = result;
 
   if (CHECK) {
     const stale = [];
     for (const [name, content] of Object.entries(files)) {
-      const path = join(OUT, name);
+      const path = join(out, name);
       const existing = existsSync(path) ? await readFile(path, 'utf8') : '';
       if (stripVolatile(existing) !== stripVolatile(content)) stale.push(name);
     }
     if (stale.length > 0) {
       console.error(`\n  STALE: ${stale.join(', ')}`);
-      console.error('  LewLM\'s contract changed. Run `npm run gen:types` and review the diff.\n');
+      console.error(`  ${TARGET}'s contract changed. Run \`npm run gen:types\` and review the diff.\n`);
       process.exit(1);
     }
-    console.log('\n  generated types match LewLM\'s current contract\n');
+    console.log(`\n  generated types match ${TARGET}'s current contract\n`);
     return;
   }
 
-  await mkdir(OUT, { recursive: true });
-  await mkdir(join(OUT, 'fixtures'), { recursive: true });
+  await mkdir(out, { recursive: true });
   await mkdir(VENDOR, { recursive: true });
 
   for (const [name, content] of Object.entries(files)) {
-    await writeFile(join(OUT, name), content);
+    await writeFile(join(out, name), content);
   }
-  for (const name of fixtures) {
-    await cp(join(LEWLM_HOME, 'examples', name), join(OUT, 'fixtures', name));
+  if (fixtures.length > 0) {
+    await mkdir(join(out, 'fixtures'), { recursive: true });
+    for (const name of fixtures) {
+      await cp(join(LEWLM_HOME, 'examples', name), join(out, 'fixtures', name));
+    }
   }
-  // Snapshot so a machine without a LewLM checkout can still regenerate.
-  await writeFile(join(VENDOR, 'openapi.json'), openapiRaw);
+  // Snapshot so a machine without the upstream checkout can still regenerate.
+  await writeFile(vendorFile, openapiRaw);
 
   console.log(`\n  ${stats.routes} routes, ${stats.components} components`);
-  console.log(`  ${stats.bundleDefs} bundle types, ${stats.events} event types`);
-  console.log(`  ${fixtures.length} fixtures\n`);
+  if (stats.bundleDefs != null) {
+    console.log(`  ${stats.bundleDefs} bundle types, ${stats.events} event types`);
+    console.log(`  ${fixtures.length} fixtures\n`);
+  } else {
+    console.log('  no bundle, no event catalogue, no fixtures — see docs/docktizo-gaps.md D2\n');
+  }
 }
 
 main().catch((error) => {
