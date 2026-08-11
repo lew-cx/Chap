@@ -26,52 +26,31 @@ import {
   respond,
   streamChat,
   ERRORS,
+  type AudioSpeechResponse,
+  type AudioTranscriptionResponse,
+  type AudioVoiceInventory,
   type ChatStreamEvent,
   type HealthResponse,
   type ModelCapabilityReport,
   type ModelInventory,
   type SingleModel,
 } from '../packages/lewlm/src/index.ts';
+import { check, flag, gap, record, summarize } from './probe.ts';
 
-const args = process.argv.slice(2);
-const flag = (name: string, fallback: string): string => {
-  const i = args.indexOf(`--${name}`);
-  return i === -1 ? fallback : (args[i + 1] ?? fallback);
-};
+/**
+ * Spoken by the round trip, then heard back. Short enough to synthesize and
+ * transcribe quickly; the keywords are the words a working pipeline cannot lose.
+ * Numbers are excluded deliberately — ASR renders "forty-one" as "41" and that
+ * is not a failure.
+ */
+const PROOF_PHRASE = 'The bell tower in Harkwell is tall.';
+const PROOF_KEYWORDS = ['bell', 'tower', 'tall'];
+
+const seconds = (value: number | null | undefined): string =>
+  value != null ? `${value.toFixed(2)}s` : 'unknown duration';
 
 const BASE = flag('base', 'http://127.0.0.1:8080');
 const client = createClient({ baseUrl: BASE, applicationId: 'chap-proof' });
-
-type Status = 'PASS' | 'FAIL' | 'GAP' | 'FIXED' | 'SKIP';
-const results: { status: Status; name: string; note: string }[] = [];
-
-function record(status: Status, name: string, note = '') {
-  results.push({ status, name, note });
-  const mark = { PASS: ' ok ', FAIL: 'FAIL', GAP: 'gap ', FIXED: 'FIXD', SKIP: 'skip' }[status];
-  console.log(`  [${mark}] ${name}${note ? `  ${note}` : ''}`);
-}
-
-async function check(name: string, fn: () => Promise<string | void>) {
-  try {
-    record('PASS', name, (await fn()) || '');
-  } catch (error) {
-    record('FAIL', name, error instanceof Error ? error.message : String(error));
-  }
-}
-
-/**
- * A probe for a known gap. `expectBroken` returns a note when the broken
- * behaviour is still present, or null when LewLM has been fixed.
- */
-async function gap(id: string, name: string, expectBroken: () => Promise<string | null>) {
-  try {
-    const note = await expectBroken();
-    if (note === null) record('FIXED', `${id} ${name}`, 'LewLM fixed this — Chap can drop its workaround');
-    else record('GAP', `${id} ${name}`, note);
-  } catch (error) {
-    record('FAIL', `${id} ${name}`, error instanceof Error ? error.message : String(error));
-  }
-}
 
 async function main() {
   console.log(`\nchap proof  ->  ${BASE}\n`);
@@ -183,6 +162,34 @@ async function main() {
     );
   }
 
+  /*
+   * How many deltas a reply arrives in, per model. Streaming is only streaming
+   * if the text lands incrementally: a reply delivered as one delta at the end
+   * is a non-streamed call wearing an SSE envelope. Measured once here and
+   * reported by G29.
+   *
+   * The prompt is chosen to produce a long, evenly-paced reply rather than a
+   * short one, so a low count means coarse delivery rather than a short answer.
+   * It is the same prompt the abort probe uses, which is not a coincidence: this
+   * is the prompt whose reply arrives in one piece on the MLX path.
+   */
+  const deltaCounts = new Map<string, number>();
+  for (const candidate of chatCandidatesThatRan) {
+    let deltas = 0;
+    try {
+      for await (const event of streamChat(client, {
+        model: candidate,
+        messages: [{ role: 'user', content: 'Count slowly from one to fifty.' }],
+        max_tokens: 48,
+      })) {
+        if (event.type === 'text') deltas += 1;
+      }
+    } catch {
+      // A model that cannot complete this is already reported by another probe.
+    }
+    deltaCounts.set(candidate, deltas);
+  }
+
   if (!modelId) {
     record('SKIP', 'streaming', 'no chat-ready model on this host');
   } else {
@@ -281,8 +288,16 @@ async function main() {
     });
 
     await check('abort mid-stream', async () => {
+      /*
+       * Abort on the first event of any kind. Keying this to the third *text*
+       * delta made the probe depend on how a runtime chunks its output: the MLX
+       * path emits no text deltas at all for this prompt, so the abort never
+       * fired and cancellation was reported broken when nothing about it was.
+       * What is being tested is that abandoning an open stream raises, which
+       * does not need a particular number of tokens to have arrived first.
+       */
       const controller = new AbortController();
-      let deltas = 0;
+      let events = 0;
       try {
         for await (const event of streamChat(
           client,
@@ -293,13 +308,14 @@ async function main() {
           },
           { signal: controller.signal },
         )) {
-          if (event.type === 'text' && ++deltas === 3) controller.abort();
+          void event;
+          if (++events === 1) controller.abort();
         }
         throw new Error('stream completed despite abort');
       } catch (error) {
         if (!isAbort(error)) throw error;
       }
-      return `aborted after ${deltas} deltas`;
+      return `aborted after ${events} event(s)`;
     });
 
     // --- M3: one union across both surfaces and both transports -------------
@@ -500,6 +516,96 @@ async function main() {
     return `${record.model.conversion_status} · chat_ready=${record.capability_availability?.chat_ready}`;
   });
 
+  // --- audio ----------------------------------------------------------------
+
+  /*
+   * The audio surfaces are proven by round trip: synthesize a phrase, feed the
+   * bytes straight back to transcription, and assert the text survives. That
+   * exercises both routes and the multipart field contract in one pass, without
+   * shipping a fixture WAV.
+   *
+   * No probing. Audio roles are per-manifest now, so `capability_availability[]`
+   * names exactly one model per audio capability and the candidate loop that
+   * used to try each in turn came out with G25.
+   */
+  const audioInventory = await client.request<ModelInventory>('GET', '/v1/models');
+  const audioModel = (capability: string): string | null =>
+    (audioInventory.capability_availability ?? []).find((entry) =>
+      (entry.ready_capabilities ?? []).includes(capability as never),
+    )?.model_id ?? null;
+
+  const speechModel = audioModel('audio_speech');
+  const transcriptionModel = audioModel('audio_transcription');
+  let spokenWav: Blob | null = null;
+
+  if (!speechModel) {
+    record('SKIP', 'audio speech', 'no model advertises audio_speech');
+  } else {
+    await check('audio speech synthesizes', async () => {
+      const result = await client.request<AudioSpeechResponse>('POST', '/v1/audio/speech', {
+        json: { model: speechModel, input: PROOF_PHRASE, format: 'wav' },
+      });
+      const bytes = Buffer.from(result.audio_base64, 'base64');
+      if (bytes.length === 0) throw new Error('empty audio');
+      spokenWav = new Blob([bytes], { type: result.media_type });
+      return `${speechModel} -> ${bytes.length} bytes ${result.media_type} ${seconds(result.duration_seconds)}`;
+    });
+
+    await check('a transcription model refuses to synthesize', async () => {
+      // G25's real payoff. This used to be `internal_error` with a bare
+      // `ValueError` — a 500 that said nothing about why the request was wrong.
+      if (!transcriptionModel) throw new Error('no transcription model to test against');
+      try {
+        await client.request('POST', '/v1/audio/speech', {
+          json: { model: transcriptionModel, input: 'no', format: 'wav' },
+        });
+        throw new Error('expected a refusal');
+      } catch (error) {
+        if (!(error instanceof LewLMApiError)) throw error;
+        if (error.status !== 400) throw new Error(`expected 400, got ${error.status} ${error.code}`);
+        return `${error.status} ${error.code}`;
+      }
+    });
+  }
+
+  if (!transcriptionModel) {
+    record('SKIP', 'audio transcription', 'no model advertises audio_transcription');
+  } else if (spokenWav === null) {
+    record('SKIP', 'audio transcription', 'no synthesized audio to transcribe');
+  } else {
+    await check('audio round trip survives transcription', async () => {
+      // These field names come from `AudioTranscriptionMultipartRequest` in the
+      // contract now, not from reading LewLM's route handler (G26).
+      const form = buildMultipart([{ uploadName: 'file', file: spokenWav, fileName: 'proof.wav' }]);
+      form.set('model', transcriptionModel);
+      form.set('language', 'en');
+      const result = await client.request<AudioTranscriptionResponse>(
+        'POST',
+        '/v1/audio/transcriptions',
+        { form },
+      );
+      const heard = result.text.toLowerCase();
+      if (!PROOF_KEYWORDS.every((word) => heard.includes(word))) {
+        throw new Error(`transcript lost the phrase: ${JSON.stringify(result.text)}`);
+      }
+      return `${transcriptionModel} -> ${result.segments?.length ?? 0} segments, ${seconds(result.duration_seconds)}`;
+    });
+  }
+
+  await check('synthesis voices are listable', async () => {
+    // G27. The lab and the composer both render a picker from this; before it
+    // existed, `voice` was a free-text field with undiscoverable legal values.
+    if (!speechModel) throw new Error('no synthesis model to list voices for');
+    const inventory = await client.request<AudioVoiceInventory>('GET', '/v1/audio/voices', {
+      query: { model: speechModel },
+    });
+    if (!inventory.enumerable) return `not enumerable: ${inventory.reason ?? 'no reason given'}`;
+    const voices = inventory.voices ?? [];
+    if (voices.length === 0) throw new Error('enumerable but empty');
+    const sources = new Set(voices.map((voice) => voice.source));
+    return `${voices.length} voices from [${[...sources].join(', ')}]`;
+  });
+
   await check('error catalog is published, not scraped', async () => {
     /*
      * G12. `ERROR_CODES` came out of a regex over LewLM's implementation source
@@ -634,6 +740,117 @@ async function main() {
     return '/v1/models carries no readiness; a picker must fan out N+1 probes';
   });
 
+  await gap('G25', 'audio capability is per-model', async () => {
+    /*
+     * A model that advertises both `audio_transcription` and `audio_speech` was
+     * the tell: capability came from the runtime, so every audio model claimed
+     * everything `mlx_audio` could do. Nothing in the inventory said which was
+     * the ASR model and which was the TTS model.
+     */
+    const both = (audioInventory.capability_availability ?? []).filter((entry) => {
+      const ready = entry.ready_capabilities ?? [];
+      return (
+        ready.includes('audio_transcription' as never) && ready.includes('audio_speech' as never)
+      );
+    });
+    if (both.length === 0) return null;
+    return `${both.length} model(s) claim both audio capabilities; the lab must pin a model per surface and probe`;
+  });
+
+  await gap('G26', 'transcription multipart body is in the contract', async () => {
+    const contract = await fetch(`${BASE}/v1/openapi.json`);
+    if (!contract.ok) return `GET /v1/openapi.json -> ${contract.status}`;
+    const document = (await contract.json()) as {
+      paths?: Record<string, Record<string, { requestBody?: unknown }>>;
+    };
+    const operation = document.paths?.['/v1/audio/transcriptions']?.post;
+    if (!operation) return 'no transcriptions operation in the contract at all';
+    if (operation.requestBody) return null;
+    return 'operation declares no requestBody; the multipart fields are hand-written, not generated';
+  });
+
+  await gap('G27', 'synthesis voices can be listed', async () => {
+    const res = await fetch(`${BASE}/v1/audio/voices`);
+    if (res.ok) return null;
+    return `GET /v1/audio/voices -> ${res.status}; \`voice\` is accepted but its legal values are undiscoverable`;
+  });
+
+  await gap('G19', 'serving profiles can be listed', async () => {
+    const res = await fetch(`${BASE}/v1/serving-profiles`);
+    if (res.ok) return null;
+    return `GET /v1/serving-profiles -> ${res.status}; the tuning loop has no memory in the UI`;
+  });
+
+  await gap('G28', 'streamed text matches the non-streamed answer', async () => {
+    /*
+     * The same model, the same prompt: streamed output degenerates into one token
+     * repeated, while the non-streamed call answers correctly. So `stream: true`
+     * is not a transport choice on these models, it changes the answer.
+     *
+     * Degeneracy is the assertion rather than correctness, because a model is
+     * free to answer differently twice — but no working model answers "name one
+     * colour" with the same token twenty times.
+     */
+    const messages = [{ role: 'user' as const, content: 'Name one colour.' }];
+    const broken: string[] = [];
+
+    for (const candidate of chatCandidatesThatRan) {
+      let sync = '';
+      for await (const event of chat(client, {
+        model: candidate,
+        messages,
+        max_tokens: 24,
+        stream: false,
+      })) {
+        if (event.type === 'text') sync += event.delta;
+      }
+
+      let streamed = '';
+      for await (const event of streamChat(client, { model: candidate, messages, max_tokens: 24 })) {
+        if (event.type === 'text') streamed += event.delta;
+      }
+
+      // The non-streamed answer is the control. A model that says nothing either
+      // way is a model problem, not a streaming one, so it is not reported here.
+      if (!sync.trim()) continue;
+
+      if (!streamed.trim()) {
+        broken.push(`${candidate}: streamed nothing, sync said ${JSON.stringify(sync.slice(0, 24))}`);
+        continue;
+      }
+      const words = streamed.trim().split(/\s+/).filter(Boolean);
+      const distinct = new Set(words.map((word) => word.toLowerCase()));
+      if (words.length >= 8 && distinct.size <= 2) {
+        broken.push(`${candidate}: degenerate ${JSON.stringify(streamed.slice(0, 32))}`);
+      }
+    }
+
+    if (broken.length === 0) return null;
+    return `${broken.length}/${chatCandidatesThatRan.size} differ from their non-streamed answer — ${broken.join('; ')}`;
+  });
+
+  await gap('G29', 'streamed text arrives incrementally', async () => {
+    /*
+     * G28 made the streamed text correct. It did not make it incremental: on the
+     * MLX path some prompts deliver the whole reply as a single delta at the end,
+     * deterministically and independently of length. The text is right, so G28's
+     * assertion passes, but nothing arrives until generation is over.
+     *
+     * `deltaCounts` was measured on a 48-token reply, so anything reporting one
+     * delta collapsed roughly 48 tokens into it rather than answering briefly.
+     */
+    const coarse = [...deltaCounts]
+      .filter(([, deltas]) => deltas === 1)
+      .map(([candidate]) => candidate);
+
+    if (coarse.length === 0) return null;
+    return (
+      `${coarse.length}/${deltaCounts.size} deliver a 48-token reply as one delta — ` +
+      `${coarse.join('; ')}. Streaming is the transport but not the experience: ` +
+      `time-to-first-token equals time-to-last-token, so the reply appears all at once.`
+    );
+  });
+
   if (modelId) {
     await gap('G4', 'streaming reports usage', async () => {
       for await (const event of streamChat(client, {
@@ -716,16 +933,7 @@ async function main() {
 
   // --- summary ------------------------------------------------------------
 
-  const failed = results.filter((r) => r.status === 'FAIL').length;
-  const gaps = results.filter((r) => r.status === 'GAP').length;
-  const fixed = results.filter((r) => r.status === 'FIXED').length;
-
-  console.log(
-    `\n  ${results.filter((r) => r.status === 'PASS').length} passed · ${failed} failed · ` +
-      `${gaps} gaps confirmed · ${fixed} gaps fixed upstream\n`,
-  );
-  if (fixed > 0) console.log('  A FIXD line means Chap can now delete a workaround.\n');
-  process.exit(failed > 0 ? 1 : 0);
+  summarize();
 }
 
 main().catch((error) => {
