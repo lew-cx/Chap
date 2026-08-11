@@ -21,6 +21,7 @@
     "gen:types": "node scripts/gen-types.mjs",
     "loc:budget": "node scripts/loc-budget.mjs",
     "proof": "tsx scripts/proof.ts",
+    "test": "tsx --test packages/lewlm/src/stream.test.ts",
     "typecheck": "tsc -b --pretty",
     "skin:check": "node scripts/skin-check.mjs"
   },

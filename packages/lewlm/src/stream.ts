@@ -12,6 +12,7 @@
  */
 
 import type { Client, RequestOptions } from './http.ts';
+import { connectionError } from './errors.ts';
 import { readSSE } from './sse.ts';
 import type {
   ChatCompletionChunk,
@@ -73,15 +74,27 @@ export interface StreamOptions {
   signal?: AbortSignal | undefined;
   /** Multipart attachments. When present the request is sent as form data. */
   form?: FormData | undefined;
+  /** Groups this generation with related calls such as sentence synthesis. */
+  correlationId?: string | undefined;
 }
 
 function requestOptions(payload: unknown, options: StreamOptions): RequestOptions {
   if (options.form) {
     // LewLM reads the JSON body from a `payload_json` part on multipart requests.
     options.form.set('payload_json', JSON.stringify(payload));
-    return { form: options.form, accept: 'text/event-stream', signal: options.signal };
+    return {
+      form: options.form,
+      accept: 'text/event-stream',
+      signal: options.signal,
+      correlationId: options.correlationId,
+    };
   }
-  return { json: payload, accept: 'text/event-stream', signal: options.signal };
+  return {
+    json: payload,
+    accept: 'text/event-stream',
+    signal: options.signal,
+    correlationId: options.correlationId,
+  };
 }
 
 /** Stream `/v1/chat/completions`. */
@@ -137,9 +150,9 @@ export async function* streamChat(
     }
   }
 
-  // LewLM always terminates with `[DONE]`; reaching here means the connection
-  // dropped mid-stream. Emit `done` so consumers can close out their state.
-  yield { type: 'done' };
+  // LewLM always terminates with `[DONE]`; EOF before it is a dropped response,
+  // not a successful partial answer.
+  throw connectionError(new Error('Chat stream ended before its [DONE] marker.'));
 }
 
 /** Stream `/v1/responses`, mapped onto the identical union. */
@@ -188,7 +201,7 @@ export async function* streamResponses(
     }
   }
 
-  yield { type: 'done' };
+  throw connectionError(new Error('Responses stream ended before its [DONE] marker.'));
 }
 
 /** Non-streaming `/v1/chat/completions`. */
@@ -204,6 +217,7 @@ export function chatCompletion(
   return client.request<ChatCompletionResponse>('POST', '/v1/chat/completions', {
     ...opts,
     signal: options.signal,
+    correlationId: options.correlationId,
   });
 }
 
@@ -220,6 +234,7 @@ export function createResponse(
   return client.request<ResponseCreateResponse>('POST', '/v1/responses', {
     ...opts,
     signal: options.signal,
+    correlationId: options.correlationId,
   });
 }
 
