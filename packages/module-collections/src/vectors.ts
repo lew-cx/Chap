@@ -47,13 +47,15 @@ function fromBlob(blob: Uint8Array): Float32Array {
   return new Float32Array(blob.buffer.slice(blob.byteOffset, blob.byteOffset + blob.byteLength));
 }
 
-/** Cosine similarity over pre-normalized-length vectors. */
+/** Cosine similarity over vectors whose dimensions have already been validated. */
 function similarity(a: Float32Array, b: Float32Array): number {
+  if (a.length !== b.length) {
+    throw new Error('Embedding dimension mismatch: query has ' + a.length + ', chunk has ' + b.length + '.');
+  }
   let dot = 0;
   let na = 0;
   let nb = 0;
-  const length = Math.min(a.length, b.length);
-  for (let i = 0; i < length; i++) {
+  for (let i = 0; i < a.length; i++) {
     dot += a[i]! * b[i]!;
     na += a[i]! * a[i]!;
     nb += b[i]! * b[i]!;
@@ -87,12 +89,41 @@ export class VectorStore {
 
   /** Upsert, so re-ingesting a document replaces its chunks rather than duplicating them. */
   put(collection: string, chunks: StoredChunk[], embeddings: number[][]): number {
+    if (chunks.length !== embeddings.length) {
+      throw new Error(
+        'Embedding response count mismatch: ' + chunks.length + ' chunks, ' + embeddings.length + ' vectors.',
+      );
+    }
+
+    const dimensions = embeddings[0]?.length ?? 0;
+    if (dimensions === 0) throw new Error('Embedding response contained an empty vector.');
+    for (const vector of embeddings) {
+      if (vector.length !== dimensions) {
+        throw new Error(
+          'Embedding response mixed ' + dimensions + '- and ' + vector.length + '-dimension vectors.',
+        );
+      }
+      if (!vector.every(Number.isFinite)) throw new Error('Embedding response contained a non-finite value.');
+    }
+
+    const existing = this.db
+      .prepare('SELECT MIN(dimensions) AS min, MAX(dimensions) AS max FROM chunks WHERE collection = ?')
+      .get(collection) as unknown as { min: number | null; max: number | null };
+    if (existing.min != null && (existing.min !== dimensions || existing.max !== dimensions)) {
+      const current = existing.min === existing.max ? existing.min : 'mixed';
+      throw new Error(
+        'Collection ' + collection + ' uses ' + current + ' dimensions; received ' + dimensions + '.',
+      );
+    }
+
     const statement = this.db.prepare(`
       INSERT INTO chunks (collection, chunk_id, text, source_id, section_id,
                           source_label, section_label, embedding, dimensions, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (collection, chunk_id) DO UPDATE SET
-        text = excluded.text, embedding = excluded.embedding,
+        text = excluded.text, source_id = excluded.source_id,
+        section_id = excluded.section_id, source_label = excluded.source_label,
+        section_label = excluded.section_label, embedding = excluded.embedding,
         dimensions = excluded.dimensions, updated_at = excluded.updated_at
     `);
 
@@ -100,8 +131,7 @@ export class VectorStore {
     this.db.exec('BEGIN');
     try {
       chunks.forEach((chunk, index) => {
-        const vector = embeddings[index];
-        if (!vector) return;
+        const vector = embeddings[index]!;
         statement.run(
           collection,
           chunk.chunk_id,
@@ -120,7 +150,7 @@ export class VectorStore {
       this.db.exec('ROLLBACK');
       throw cause;
     }
-    return chunks.length;
+    return embeddings.length;
   }
 
   /**

@@ -64,10 +64,10 @@ export function Documents({ onChunks }: { onChunks?: (ingest: DocumentIngestResp
       const result = await lewlm.request<DocumentIngestResponse>('POST', '/v1/documents/ingest', {
         json: {
           sources: await Promise.all(
-            chosen.map(async (file, index) => ({
+            chosen.map(async (file) => ({
               // Caller-owned identity: these ids come back on every chunk and
               // every citation, so Chap can resolve a citation to a real file.
-              source_id: `chap-upload-${index}`,
+              source_id: 'chap-upload-' + crypto.randomUUID(),
               file_name: file.name,
               media_type: file.type || null,
               content_base64: await toBase64(file),
