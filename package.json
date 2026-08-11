@@ -27,6 +27,9 @@
     "typecheck": "tsc -b --pretty",
     "skin:check": "node scripts/skin-check.mjs"
   },
+  "overrides": {
+    "brace-expansion": "5.0.8"
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "json-schema-to-typescript": "^15.0.4",
