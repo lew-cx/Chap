@@ -14,21 +14,26 @@
 
 import { Hono } from 'hono';
 
-import type { ChapConfig } from './config.ts';
 import { VectorStore, type StoredChunk } from './vectors.ts';
+
+/** LewLM, as this module needs it. Core is not imported — see server.ts. */
+export interface LewLM {
+  baseUrl: string;
+  apiKey: string | undefined;
+}
 
 interface EmbeddingResponse {
   data: { embedding: number[]; index: number }[];
   model: string;
 }
 
-/** Embed through LewLM. Chap owns no model and computes no vectors. */
-async function embed(config: ChapConfig, input: string[]): Promise<number[][]> {
+/** Embed through LewLM. This module owns no model and computes no vectors. */
+async function embed(config: LewLM, input: string[]): Promise<number[][]> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (config.lewlmApiKey) headers['x-api-key'] = config.lewlmApiKey;
+  if (config.apiKey) headers['x-api-key'] = config.apiKey;
   headers['x-lewlm-application-id'] = 'chap';
 
-  const res = await fetch(`${config.lewlmBaseUrl}/v1/embeddings`, {
+  const res = await fetch(`${config.baseUrl}/v1/embeddings`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ input }),
@@ -47,7 +52,7 @@ async function embed(config: ChapConfig, input: string[]): Promise<number[][]> {
   return body.data.sort((a, b) => a.index - b.index).map((datum) => datum.embedding);
 }
 
-export function collections(config: ChapConfig, storePath: string): Hono {
+export function collections(config: LewLM, storePath: string): Hono {
   const store = new VectorStore(storePath);
   const app = new Hono();
 

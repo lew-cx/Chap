@@ -15,10 +15,14 @@
  * "helpfully" fix anything. The moment it does, a workaround becomes invisible
  * to scripts/loc-budget.mjs and the gap report loses its teeth. If you feel the
  * urge to add logic here, that urge is a gap report entry.
+ *
+ * The credentials are supplied per target rather than hardcoded, because there
+ * is now more than one upstream. That is still data: the pipe sets exactly the
+ * headers it was handed and invents none. "Reshape" includes reshaping headers
+ * on any condition other than the target they were given for.
  */
 
 import type { Context } from 'hono';
-import type { ChapConfig } from './config.ts';
 
 /**
  * Headers that describe a single transport hop and must not be relayed.
@@ -38,18 +42,26 @@ const HOP_BY_HOP = new Set([
   'content-length',
 ]);
 
-function forwardRequestHeaders(source: Headers, config: ChapConfig): Headers {
+/** One upstream, and what the pipe is allowed to add on the way there. */
+export interface PipeTarget {
+  baseUrl: string;
+  /** Removed from the path before forwarding: `/dk/healthz` reaches DocKtizo as `/healthz`. */
+  stripPrefix?: string;
+  /**
+   * Credentials and audit identity the browser must not hold. Supplied by the
+   * caller, set verbatim, never conditional on the request.
+   */
+  headers?: Readonly<Record<string, string>>;
+}
+
+function forwardRequestHeaders(source: Headers, inject: PipeTarget['headers']): Headers {
   const headers = new Headers();
   for (const [key, value] of source) {
     if (!HOP_BY_HOP.has(key.toLowerCase())) headers.set(key, value);
   }
 
   // Credentials live in this process, never in the browser.
-  if (config.lewlmApiKey) headers.set('x-api-key', config.lewlmApiKey);
-
-  // Operational identity, not authentication. LewLM records it for audit and
-  // reports it in bounded `request_metrics.applications` summaries.
-  headers.set('x-lewlm-application-id', 'chap');
+  for (const [key, value] of Object.entries(inject ?? {})) headers.set(key, value);
 
   return headers;
 }
@@ -80,18 +92,9 @@ function connectionError(target: string, cause: unknown): Response {
   );
 }
 
-/**
- * Pipe one request through to an upstream origin, preserving the streaming body.
- *
- * `stripPrefix` is removed from the path before forwarding, so `/dk/healthz`
- * reaches DocKtizo as `/healthz` while `/v1/...` reaches LewLM untouched.
- */
-export async function pipe(
-  c: Context,
-  baseUrl: string,
-  config: ChapConfig,
-  stripPrefix = '',
-): Promise<Response> {
+/** Pipe one request through to an upstream origin, preserving the streaming body. */
+export async function pipe(c: Context, upstreamTarget: PipeTarget): Promise<Response> {
+  const { baseUrl, stripPrefix = '', headers: inject } = upstreamTarget;
   const url = new URL(c.req.url);
   const path = stripPrefix ? url.pathname.slice(stripPrefix.length) : url.pathname;
   const target = `${baseUrl}${path}${url.search}`;
@@ -103,7 +106,7 @@ export async function pipe(
   try {
     upstream = await fetch(target, {
       method,
-      headers: forwardRequestHeaders(c.req.raw.headers, config),
+      headers: forwardRequestHeaders(c.req.raw.headers, inject),
       body: hasBody ? c.req.raw.body : undefined,
       // Required by undici whenever a stream is used as a request body.
       ...(hasBody ? { duplex: 'half' } : {}),

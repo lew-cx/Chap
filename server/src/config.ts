@@ -1,14 +1,20 @@
-/** Server configuration, read once from the environment. */
+/**
+ * Server configuration, read once from the environment.
+ *
+ * LewLM and nothing else. A module's own settings are read by the module, from
+ * `ModuleContext.env` — otherwise every installed tool would leave a permanent
+ * mark on core's config even after it was removed.
+ */
 
 export interface ChapConfig {
+  host: string;
   port: number;
   lewlmBaseUrl: string;
   lewlmApiKey: string | undefined;
-  docktizoBaseUrl: string;
   /** Serve web/dist as static files. Off in dev, where Vite serves the SPA. */
   serveStatic: boolean;
-  /** Where the vector store lives. LewLM owns no vector storage by design. */
-  vectorStorePath: string;
+  /** Where modules keep state. Chap creates it; each module owns a path inside. */
+  dataDir: string;
 }
 
 function trimTrailingSlash(value: string): string {
@@ -17,11 +23,11 @@ function trimTrailingSlash(value: string): string {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ChapConfig {
   return {
+    host: env['CHAP_HOST'] || '127.0.0.1',
     port: Number(env['CHAP_PORT'] ?? 8787),
     lewlmBaseUrl: trimTrailingSlash(env['LEWLM_BASE_URL'] ?? 'http://127.0.0.1:8080'),
     lewlmApiKey: env['LEWLM_API_KEY'] || undefined,
-    docktizoBaseUrl: trimTrailingSlash(env['DOCKTIZO_BASE_URL'] ?? 'http://127.0.0.1:8090'),
     serveStatic: env['NODE_ENV'] === 'production',
-    vectorStorePath: env['CHAP_VECTOR_STORE'] ?? '.chap/vectors.sqlite',
+    dataDir: env['CHAP_DATA_DIR'] ?? '.chap',
   };
 }
