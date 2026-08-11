@@ -26,7 +26,7 @@ import { Json } from '../components/Json.tsx';
 import { Section } from '../components/Screen.tsx';
 import { lewlm } from '../lib/client.ts';
 import { usePolled } from '../lib/usePolled.ts';
-import { Table } from '../ops/Table.tsx';
+import { Table } from '../components/Table.tsx';
 
 /** LewLM takes bytes as base64 inside JSON on this route. */
 async function toBase64(file: File): Promise<string> {

@@ -16,18 +16,20 @@ import { useEffect, useState } from 'react';
 
 import type { DocumentChunk, DocumentIngestResponse, RetrievalContextResponse } from '@chap/lewlm';
 
-import { Disclosure } from '../components/Disclosure.tsx';
-import { Labelled, Stat } from '../components/Field.tsx';
-import { Json } from '../components/Json.tsx';
-import { CapabilityNotice } from '../components/CapabilityNotice.tsx';
-import { Section } from '../components/Screen.tsx';
-import { useCapability } from '../lib/useCapability.ts';
-import { lewlm } from '../lib/client.ts';
-import { collections, type CollectionSummary } from '../lib/collections.ts';
-import { Table } from '../ops/Table.tsx';
-import { Documents } from './Documents.tsx';
+import { Disclosure } from '@/components/Disclosure.tsx';
+import { Labelled, Stat } from '@/components/Field.tsx';
+import { Json } from '@/components/Json.tsx';
+import { CapabilityNotice } from '@/components/CapabilityNotice.tsx';
+import { Section } from '@/components/Screen.tsx';
+import { useCapability } from '@/lib/useCapability.ts';
+import { lewlm } from '@/lib/client.ts';
+import { collections, type CollectionSummary } from '../client.ts';
+import { Table } from '@/components/Table.tsx';
+import { useGrounding } from '@/store/grounding.ts';
+import { Documents } from '@/lab/Documents.tsx';
 
-export function Knowledge({ onGround }: { onGround?: (chunks: DocumentChunk[]) => void }) {
+export function Knowledge() {
+  const ground = useGrounding((state) => state.ground);
   const [items, setItems] = useState<CollectionSummary[]>([]);
   const [name, setName] = useState('default');
   const [query, setQuery] = useState('');
@@ -62,7 +64,7 @@ export function Knowledge({ onGround }: { onGround?: (chunks: DocumentChunk[]) =
 
   return (
     <>
-      <CapabilityNotice capability="embeddings" status={embeddings_capability} />
+      <CapabilityNotice title="no runnable embeddings model on this host" status={embeddings_capability} />
       <Section title="collections" hint={`${items.length} · ${items.reduce((sum, item) => sum + item.chunk_count, 0)} chunks`}>
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <Labelled label="collection">
@@ -160,7 +162,7 @@ export function Knowledge({ onGround }: { onGround?: (chunks: DocumentChunk[]) =
             type="button"
             className="btn-accent"
             disabled={!ranked?.items.length}
-            onClick={() => onGround?.((ranked?.items ?? []).map((item) => item.chunk))}
+            onClick={() => ground((ranked?.items ?? []).map((item) => item.chunk))}
           >
             ground a chat turn
           </button>

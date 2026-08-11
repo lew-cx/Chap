@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Chap's own retrieval store: chunks in node:sqlite, embeddings and reranking from LewLM.",
   "exports": {
-    "./server": "./src/server.ts"
+    "./server": "./src/server.ts",
+    "./web": "./src/web.tsx"
   },
   "chap": {
     "budget": 500

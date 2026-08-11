@@ -1,58 +1,47 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 
-import type { DocumentChunk, HealthResponse } from '@chap/lewlm';
+import type { HealthResponse } from '@chap/lewlm';
 
 import { NavItem, StatusDot } from './components/Nav.tsx';
 import { ChatScreen } from './chat/ChatScreen.tsx';
 import { LabScreen } from './lab/LabScreen.tsx';
+import { moduleScreens } from './modules.ts';
 import { OpsScreen } from './ops/OpsScreen.tsx';
 import { SettingsScreen } from './settings/SettingsScreen.tsx';
 import { lewlm } from './lib/client.ts';
 import { AppShell } from './shell/AppShell.tsx';
 import { TelemetryRail } from './shell/TelemetryRail.tsx';
+import { useNav } from './store/nav.ts';
 import { registerSkinShortcut } from './store/skin.ts';
 
-type Screen = 'chat' | 'ops' | 'lab' | 'settings';
-
-const SCREENS: { id: Screen; label: string }[] = [
-  { id: 'chat', label: 'Chat' },
-  { id: 'ops', label: 'Ops' },
-  { id: 'lab', label: 'Lab' },
-  { id: 'settings', label: 'Settings' },
+/**
+ * The primary nav. The four screens Chap owns, then whatever the registry adds.
+ *
+ * The spread is the only thing in this file that knows modules exist, and it
+ * knows nothing about which ones — see modules.ts.
+ */
+const SCREENS: { id: string; label: string; component: ComponentType }[] = [
+  { id: 'chat', label: 'Chat', component: ChatScreen },
+  { id: 'ops', label: 'Ops', component: OpsScreen },
+  { id: 'lab', label: 'Lab', component: LabScreen },
+  { id: 'settings', label: 'Settings', component: SettingsScreen },
+  ...moduleScreens(),
 ];
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>('chat');
-  /**
-   * Chunks handed over from the Lab's knowledge base. This is the whole seam
-   * between Chap's vector store and LewLM's grounding: retrieve in the Lab,
-   * jump to Chat with the winning chunks already loaded as citation context.
-   */
-  const [grounding, setGrounding] = useState<DocumentChunk[] | null>(null);
+  const screen = useNav((state) => state.screen);
+  const go = useNav((state) => state.go);
 
   useEffect(registerSkinShortcut, []);
+
+  const Main = (SCREENS.find((entry) => entry.id === screen) ?? SCREENS[0]!).component;
 
   return (
     <AppShell
       nav={SCREENS.map(({ id, label }) => (
-        <NavItem key={id} label={label} active={screen === id} onSelect={() => setScreen(id)} />
+        <NavItem key={id} label={label} active={screen === id} onSelect={() => go(id)} />
       ))}
-      main={
-        screen === 'chat' ? (
-          <ChatScreen grounding={grounding} onGroundingUsed={() => setGrounding(null)} />
-        ) : screen === 'ops' ? (
-          <OpsScreen />
-        ) : screen === 'lab' ? (
-          <LabScreen
-            onGround={(chunks) => {
-              setGrounding(chunks);
-              setScreen('chat');
-            }}
-          />
-        ) : (
-          <SettingsScreen />
-        )
-      }
+      main={<Main />}
       rail={<TelemetryRail />}
       status={<ConnectionStatus />}
     />

@@ -5,6 +5,7 @@
     "types": ["vite/client"],
     "paths": {
       "@chap/lewlm": ["../packages/lewlm/src/index.ts"],
+      "@chap/module-*/web": ["../packages/module-*/src/web.tsx"],
       "@/*": ["./src/*"]
     }
   },

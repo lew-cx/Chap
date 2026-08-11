@@ -6,38 +6,42 @@
  * them has to think about layout.
  */
 
-import type { ReactNode } from 'react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 
-export function Screen<T extends string>({
-  tabs,
-  active,
-  onSelect,
-  actions,
-  children,
-}: {
-  tabs: readonly T[];
-  active: T;
-  onSelect: (tab: T) => void;
-  actions?: ReactNode;
-  children: ReactNode;
-}) {
+/**
+ * One tab. A descriptor rather than a bare string because a module contributes
+ * tabs by concatenation, and a `tab === 'x' && <X/>` chain cannot absorb an array
+ * that is not known when the file is written.
+ */
+export interface ScreenTab {
+  id: string;
+  /** Defaults to `id`, which is what every tab in Chap displays today. */
+  label?: string;
+  component: ComponentType;
+}
+
+export function Screen({ tabs, actions }: { tabs: readonly ScreenTab[]; actions?: ReactNode }) {
+  const [active, setActive] = useState(tabs[0]?.id ?? '');
+  const current = tabs.find((tab) => tab.id === active) ?? tabs[0];
+  const Body = current?.component;
+
   return (
     <div className="flex h-full flex-col">
       <div className="hairline flex flex-wrap items-center gap-2 border-b px-4 py-2">
         {tabs.map((tab) => (
           <button
-            key={tab}
+            key={tab.id}
             type="button"
             className="chip"
-            aria-pressed={tab === active}
-            onClick={() => onSelect(tab)}
+            aria-pressed={tab.id === current?.id}
+            onClick={() => setActive(tab.id)}
           >
-            {tab}
+            {tab.label ?? tab.id}
           </button>
         ))}
         {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
       </div>
-      <div className="scroll-thin flex-1 overflow-y-auto p-4">{children}</div>
+      <div className="scroll-thin flex-1 overflow-y-auto p-4">{Body && <Body />}</div>
     </div>
   );
 }

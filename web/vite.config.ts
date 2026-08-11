@@ -9,11 +9,21 @@ const CHAP_SERVER = process.env['CHAP_SERVER_URL'] ?? 'http://127.0.0.1:8787';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: {
+    // Array form, because the module rule needs a RegExp and the object form
+    // cannot express one.
+    alias: [
       // The client package ships TypeScript source, no build step.
-      '@chap/lewlm': fileURLToPath(new URL('../packages/lewlm/src/index.ts', import.meta.url)),
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
+      {
+        find: '@chap/lewlm',
+        replacement: fileURLToPath(new URL('../packages/lewlm/src/index.ts', import.meta.url)),
+      },
+      // Modules ship source too. One rule, naming no module, forever.
+      {
+        find: /^@chap\/(module-[^/]+)\/([^/]+)$/,
+        replacement: fileURLToPath(new URL('../packages/$1/src/$2', import.meta.url)),
+      },
+      { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+    ],
   },
   server: {
     port: 5173,

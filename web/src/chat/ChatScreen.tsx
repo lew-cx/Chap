@@ -20,7 +20,6 @@ import {
   respond,
   type ChatCompletionRequest,
   type CompletionUsage,
-  type DocumentChunk,
   type ExecutionMetadata,
   type ReasoningOutput,
   type ReasoningVisibility,
@@ -35,6 +34,7 @@ import { lewlm } from '../lib/client.ts';
 import { useModels } from '../lib/useModels.ts';
 import { useStructuredSupport } from '../lib/useStructuredSupport.ts';
 import { useTokenCount } from '../lib/useTokenCount.ts';
+import { useGrounding } from '../store/grounding.ts';
 import { ContextPanel } from './ContextPanel.tsx';
 import { FormatPanel } from './FormatPanel.tsx';
 import { Message } from './Message.tsx';
@@ -92,14 +92,10 @@ function reasoningText(reasoning: ReasoningOutput): string | null {
   return reasoning.summary ?? reasoning.content ?? null;
 }
 
-interface ChatScreenProps {
-  /** Chunks handed over from the Lab's knowledge base, already ranked. */
-  grounding?: DocumentChunk[] | null;
-  onGroundingUsed?: () => void;
-}
-
-export function ChatScreen({ grounding, onGroundingUsed }: ChatScreenProps = {}) {
+export function ChatScreen() {
   const { models, reportLoadFailure } = useModels();
+  const grounding = useGrounding((state) => state.chunks);
+  const groundingUsed = useGrounding((state) => state.clear);
   const [state, setState] = useState<ComposerState>({
     surface: 'chat',
     stream: true,
@@ -150,7 +146,7 @@ export function ChatScreen({ grounding, onGroundingUsed }: ChatScreenProps = {})
       context: grounding.map((chunk) => ({ label: chunk.source_label, text: chunk.text })),
     }));
     setDrawer('context');
-    onGroundingUsed?.();
+    groundingUsed();
   }, [grounding]);
 
   useEffect(() => {

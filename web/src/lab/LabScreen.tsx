@@ -6,28 +6,23 @@
  * vector store will sit behind.
  */
 
-import { useState } from 'react';
-
-import type { DocumentChunk } from '@chap/lewlm';
-
 import { Screen } from '../components/Screen.tsx';
+import { moduleTabs } from '../modules.ts';
 import { Audio } from './Audio.tsx';
 import { Documents } from './Documents.tsx';
-import { Knowledge } from './Knowledge.tsx';
 import { Semantic } from './Semantic.tsx';
 
-const TABS = ['knowledge', 'semantic', 'documents', 'audio'] as const;
-type Tab = (typeof TABS)[number];
-
-export function LabScreen({ onGround }: { onGround?: (chunks: DocumentChunk[]) => void }) {
-  const [tab, setTab] = useState<Tab>('knowledge');
-
+export function LabScreen() {
   return (
-    <Screen tabs={TABS} active={tab} onSelect={setTab}>
-      {tab === 'knowledge' && <Knowledge onGround={onGround} />}
-      {tab === 'semantic' && <Semantic />}
-      {tab === 'documents' && <Documents />}
-      {tab === 'audio' && <Audio />}
-    </Screen>
+    <Screen
+      // Module tabs first: a retrieval module's tab is the one you want open
+      // when there is one, and the first tab in the list is the default.
+      tabs={[
+        ...moduleTabs('lab'),
+        { id: 'semantic', component: Semantic },
+        { id: 'documents', component: Documents },
+        { id: 'audio', component: Audio },
+      ]}
+    />
   );
 }

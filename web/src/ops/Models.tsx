@@ -27,7 +27,7 @@ import { Json } from '../components/Json.tsx';
 import { Missing, Section } from '../components/Screen.tsx';
 import { lewlm } from '../lib/client.ts';
 import { usePolled } from '../lib/usePolled.ts';
-import { Table, type Column } from './Table.tsx';
+import { Table, type Column } from '../components/Table.tsx';
 
 type Item = ModelInventory['items'][number];
 

@@ -10,33 +10,31 @@
  * against a contract it was not built for is worse than useless.
  */
 
-import { useState } from 'react';
-
 import { CONTRACT, EVENT_TYPES, ERROR_CODES, type HealthResponse } from '@chap/lewlm';
 
 import { Disclosure } from '../components/Disclosure.tsx';
 import { Stat } from '../components/Field.tsx';
 import { StatusDot } from '../components/Nav.tsx';
 import { Screen, Section } from '../components/Screen.tsx';
+import { Table } from '../components/Table.tsx';
+import { useModuleList } from '../lib/useModules.ts';
 import { usePolled } from '../lib/usePolled.ts';
+import { moduleTabs } from '../modules.ts';
 import { SkinPanel } from '../shell/SkinPanel.tsx';
 
-const TABS = ['appearance', 'contract', 'gaps'] as const;
-type Tab = (typeof TABS)[number];
-
 export function SettingsScreen() {
-  const [tab, setTab] = useState<Tab>('appearance');
-
   return (
-    <Screen tabs={TABS} active={tab} onSelect={setTab}>
-      {tab === 'appearance' && <Appearance />}
-      {tab === 'contract' && <Contract />}
-      {tab === 'gaps' && <Gaps />}
-    </Screen>
+    <Screen
+      tabs={[
+        { id: 'appearance', component: SkinPanel },
+        { id: 'contract', component: Contract },
+        { id: 'modules', component: Modules },
+        { id: 'gaps', component: Gaps },
+        ...moduleTabs('settings'),
+      ]}
+    />
   );
 }
-
-const Appearance = SkinPanel;
 
 function Contract() {
   const { data: health } = usePolled<HealthResponse>('/v1/health', 10_000);
@@ -84,6 +82,42 @@ function Contract() {
         </Disclosure>
       </Section>
     </>
+  );
+}
+
+/**
+ * What is installed beyond LewLM, and whether it can actually work.
+ *
+ * The list is the server's, not this file's — Settings does not know which
+ * modules exist any more than App does. An unready module names the env keys it
+ * reads, because "which variable did I forget" is the question this panel exists
+ * to answer.
+ */
+function Modules() {
+  const modules = useModuleList();
+
+  return (
+    <Section title="installed modules" hint={`${modules.length} · LewLM is core, not a module`}>
+      <Table
+        columns={[
+          { key: 'id', label: 'module', render: (row) => row.label },
+          { key: 'prefix', label: 'mounted at', render: (row) => row.prefix },
+          {
+            key: 'ready',
+            label: 'status',
+            render: (row) =>
+              row.ready ? (
+                <StatusDot tone="ok">ready</StatusDot>
+              ) : (
+                <StatusDot tone="warn">{row.reason ?? 'not ready'}</StatusDot>
+              ),
+          },
+          { key: 'env', label: 'reads', render: (row) => row.env.join(' · ') || '—' },
+        ]}
+        rows={modules}
+        empty="none installed — Chap is a LewLM client and nothing else"
+      />
+    </Section>
   );
 }
 

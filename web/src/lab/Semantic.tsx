@@ -23,7 +23,7 @@ import { CapabilityNotice } from '../components/CapabilityNotice.tsx';
 import { Section } from '../components/Screen.tsx';
 import { useCapability } from '../lib/useCapability.ts';
 import { lewlm } from '../lib/client.ts';
-import { Table } from '../ops/Table.tsx';
+import { Table } from '../components/Table.tsx';
 
 /** Cosine similarity, the one calculation Chap does that LewLM does not expose. */
 function cosine(a: number[], b: number[]): number {
@@ -73,7 +73,7 @@ export function Semantic() {
 
   return (
     <>
-      <CapabilityNotice capability="embeddings" status={embeddings_capability} />
+      <CapabilityNotice title="no runnable embeddings model on this host" status={embeddings_capability} />
       <Section title="inputs" hint={`${lines.length} lines`}>
         <div className="flex flex-col gap-3">
           <textarea

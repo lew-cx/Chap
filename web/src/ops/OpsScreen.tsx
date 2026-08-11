@@ -6,28 +6,25 @@
  * everything an operator needs and Chap's job is to show it without editorializing.
  */
 
-import { useState } from 'react';
-
 import { Screen } from '../components/Screen.tsx';
+import { moduleTabs } from '../modules.ts';
 import { Events } from './Events.tsx';
 import { Jobs } from './Jobs.tsx';
 import { Models } from './Models.tsx';
 import { Overview } from './Overview.tsx';
 import { Runtime } from './Runtime.tsx';
 
-const TABS = ['overview', 'models', 'runtime', 'events', 'jobs'] as const;
-type Tab = (typeof TABS)[number];
-
 export function OpsScreen() {
-  const [tab, setTab] = useState<Tab>('overview');
-
   return (
-    <Screen tabs={TABS} active={tab} onSelect={setTab}>
-      {tab === 'overview' && <Overview />}
-      {tab === 'models' && <Models />}
-      {tab === 'runtime' && <Runtime />}
-      {tab === 'events' && <Events />}
-      {tab === 'jobs' && <Jobs />}
-    </Screen>
+    <Screen
+      tabs={[
+        { id: 'overview', component: Overview },
+        { id: 'models', component: Models },
+        { id: 'runtime', component: Runtime },
+        { id: 'events', component: Events },
+        { id: 'jobs', component: Jobs },
+        ...moduleTabs('ops'),
+      ]}
+    />
   );
 }
