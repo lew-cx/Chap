@@ -135,6 +135,7 @@ export type SessionUpdateRequest = Body<'/v1/sessions/{session_id}', 'patch'>;
 
 export type AudioTranscriptionResponse = Res<'/v1/audio/transcriptions', 'post'>;
 export type AudioSpeechResponse = Res<'/v1/audio/speech', 'post'>;
+export type AudioVoiceInventory = Res<'/v1/audio/voices', 'get'>;
 
 /** The three session context policies LewLM merges history under. */
 export type SessionContextPolicy = 'full_history' | 'last_turn' | 'summary_and_last_turn';

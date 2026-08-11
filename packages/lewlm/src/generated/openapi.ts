@@ -824,6 +824,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/audio/voices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Audio Voices
+         * @description List the synthesis voices the selected model can resolve on this host.
+         */
+        get: operations["list_audio_voices_v1_audio_voices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/audio/speech": {
         parameters: {
             query?: never;
@@ -980,6 +1000,29 @@ export interface paths {
          * @description Return experimental cluster status.
          */
         get: operations["cluster_stats_v1_cluster_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/serving-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Serving Profiles
+         * @description List serving profiles stored on this host, newest first.
+         *
+         *     `limit` bounds the stored profiles read before `model` and `capability`
+         *     narrow them, so it is a scan window rather than a page size.
+         */
+        get: operations["list_serving_profiles_v1_serving_profiles_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1186,6 +1229,12 @@ export interface components {
             /** Idempotency Key */
             idempotency_key?: string | null;
         };
+        /**
+         * AudioCapabilityRole
+         * @description Which side of the audio contract a model can actually serve.
+         * @enum {string}
+         */
+        AudioCapabilityRole: "transcription" | "speech";
         /** AudioSpeechCreateRequest */
         AudioSpeechCreateRequest: {
             /** Model */
@@ -1249,6 +1298,47 @@ export interface components {
             /** Text */
             text: string;
         };
+        /**
+         * AudioVoice
+         * @description A synthesis voice the host can actually resolve right now.
+         *
+         *     Voices are host state, not manifest state: a backend may resolve a voice
+         *     from its own download cache rather than from the model directory, so this
+         *     is reported per host and per model instead of being declared up front, and
+         *     each voice names the file it was found in.
+         */
+        AudioVoice: {
+            /** Voice Id */
+            voice_id: string;
+            source: components["schemas"]["AudioVoiceSource"];
+            /** Source Path */
+            source_path?: string | null;
+        };
+        /**
+         * AudioVoiceInventory
+         * @description Voices available for one model on this host.
+         */
+        AudioVoiceInventory: {
+            /** Model Id */
+            model_id: string;
+            /** Runtime Name */
+            runtime_name?: string | null;
+            /** Voices */
+            voices?: components["schemas"]["AudioVoice"][];
+            /**
+             * Enumerable
+             * @default true
+             */
+            enumerable: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
+         * AudioVoiceSource
+         * @description Where a synthesis voice was found.
+         * @enum {string}
+         */
+        AudioVoiceSource: "bundle" | "backend_cache";
         /** AutotuneCandidateSummary */
         AutotuneCandidateSummary: {
             /** Name */
@@ -4223,6 +4313,8 @@ export interface components {
             architecture_subtype: components["schemas"]["ArchitectureSubtype"];
             /** Modality */
             modality: components["schemas"]["ModelModality"][];
+            /** Audio Roles */
+            audio_roles?: components["schemas"]["AudioCapabilityRole"][];
             /** Source Path */
             source_path: string;
             format_type: components["schemas"]["ModelFormat"];
@@ -6053,6 +6145,25 @@ export interface components {
                 [key: string]: number | string | boolean | null;
             };
         };
+        /**
+         * ServingProfileInventory
+         * @description Stored serving profiles, so the tuning loop has a memory to read back.
+         *
+         *     Profiles are keyed by host, model, runtime and workload class, and a
+         *     generation applies whichever one matches; this lists what exists rather
+         *     than only what the last autotune run produced.
+         */
+        ServingProfileInventory: {
+            /** Count */
+            count: number;
+            /** Items */
+            items?: components["schemas"]["ServingProfileRecommendation"][];
+            /**
+             * Unreadable Count
+             * @default 0
+             */
+            unreadable_count: number;
+        };
         /** ServingProfileRecommendation */
         ServingProfileRecommendation: {
             /** Profile Id */
@@ -6976,6 +7087,64 @@ export interface components {
             reason: string;
             /** Recommendation Reason */
             recommendation_reason?: string | null;
+        };
+        /** AudioTranscriptionCreateRequest */
+        AudioTranscriptionCreateRequest: {
+            /**
+             * Model
+             * @default null
+             */
+            model: string | null;
+            /** Audio Base64 */
+            audio_base64: string;
+            /**
+             * File Name
+             * @default audio.wav
+             */
+            file_name: string;
+            /**
+             * Language
+             * @default null
+             */
+            language: string | null;
+            /**
+             * Prompt
+             * @default null
+             */
+            prompt: string | null;
+        };
+        /**
+         * AudioTranscriptionMultipartRequest
+         * @description Form fields accepted by the multipart form of `/v1/audio/transcriptions`.
+         *
+         *     The route hand-parses the form because it serves two body shapes, so this
+         *     model exists to publish the field names rather than to validate them.
+         */
+        AudioTranscriptionMultipartRequest: {
+            /**
+             * File
+             * Format: binary
+             * @description Audio file to transcribe.
+             */
+            file: string;
+            /**
+             * Model
+             * @description Model id to transcribe with. LewLM routes to a transcription-capable model when omitted.
+             * @default null
+             */
+            model: string | null;
+            /**
+             * Language
+             * @description Spoken-language hint for the decoder.
+             * @default null
+             */
+            language: string | null;
+            /**
+             * Prompt
+             * @description Optional decoding prompt passed to the backend.
+             * @default null
+             */
+            prompt: string | null;
         };
         /** ChatMessage */
         ChatMessage: {
@@ -9058,7 +9227,12 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["AudioTranscriptionMultipartRequest"];
+                "application/json": components["schemas"]["AudioTranscriptionCreateRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -9067,6 +9241,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AudioTranscriptionCreateResponse"];
+                };
+            };
+        };
+    };
+    list_audio_voices_v1_audio_voices_get: {
+        parameters: {
+            query?: {
+                model?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AudioVoiceInventory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -9293,6 +9498,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClusterStatus"];
+                };
+            };
+        };
+    };
+    list_serving_profiles_v1_serving_profiles_get: {
+        parameters: {
+            query?: {
+                model?: string | null;
+                capability?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServingProfileInventory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
