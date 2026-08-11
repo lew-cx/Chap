@@ -17,7 +17,19 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const WEB = join(ROOT, 'web/src');
+
+/**
+ * Both trees that render. A module's UI is outside web/src and would otherwise
+ * be the one place in Chap where a skin branch could appear unchallenged.
+ */
+const TREES = [join(ROOT, 'web/src'), ...(await moduleSources())];
+
+async function moduleSources() {
+  const entries = await readdir(join(ROOT, 'packages'), { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('module-'))
+    .map((entry) => join(ROOT, 'packages', entry.name, 'src'));
+}
 
 const ALLOWED = new Set([
   'web/src/shell/AppShell.tsx',
@@ -58,10 +70,14 @@ async function* files(dir) {
   }
 }
 
+async function* trees() {
+  for (const tree of TREES) yield* files(tree);
+}
+
 const violations = [];
 let variantUses = 0;
 
-for await (const path of files(WEB)) {
+for await (const path of trees()) {
   const rel = relative(ROOT, path);
   const source = await readFile(path, 'utf8');
 

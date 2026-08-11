@@ -20,6 +20,7 @@
     "start": "npm run start --workspace @chap/server",
     "gen:types": "node scripts/gen-types.mjs",
     "loc:budget": "node scripts/loc-budget.mjs",
+    "module:check": "node scripts/module-check.mjs",
     "proof": "tsx scripts/proof.ts",
     "test": "tsx --test packages/lewlm/src/stream.test.ts",
     "typecheck": "tsc -b --pretty",
