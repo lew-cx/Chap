@@ -130,6 +130,12 @@ function Modules() {
  */
 const OPEN_GAPS: { id: string; title: string; effect: string }[] = [
   {
+    id: 'G30',
+    title: 'a caller-supplied maxLength can kill the server',
+    effect:
+      'One request with a string property at maxLength 2000 compiles to a GBNF grammar llama.cpp refuses, and the refusal takes the process with it. Any caller who can send a response_format can end the service for every application on the host. It is why decode-time structured output is unusable against schemas from an ordinary generator — Pydantic emits maxLength for every bounded string.',
+  },
+  {
     id: 'G13',
     title: '/v1/events has no filtering or replay',
     effect:
@@ -156,8 +162,8 @@ function Gaps() {
         ))}
       </div>
       <p className="micro-label mt-3">
-        The live proof currently passes 23 checks and confirms the runtime-specific
-        gaps it can exercise. G13 is tracked structurally because replay cannot be
+        The live proof passes 23 checks and confirms the three gaps above. G30 runs
+        last, because proving it takes LewLM down. G13 is tracked structurally because replay cannot be
         proved from an endpoint that does not offer it. Full detail is in
         docs/lewlm-gaps.md.
       </p>

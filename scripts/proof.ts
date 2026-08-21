@@ -34,6 +34,7 @@ import {
   type ModelCapabilityReport,
   type ModelInventory,
   type SingleModel,
+  type StructuredOutputResult,
 } from '../packages/lewlm/src/index.ts';
 import { check, flag, gap, record, summarize } from './probe.ts';
 
@@ -930,6 +931,76 @@ async function main() {
       return `contract present; this runtime honors none of [${(report.unsupported ?? []).join(', ')}]`;
     });
   }
+
+  /**
+   * G30 used to run last because it took the server down: a `maxLength` past
+   * roughly a thousand compiled to a GBNF grammar llama.cpp's parser rejected,
+   * and the rejection killed the process instead of answering. LewLM now keeps
+   * the bounds it compiles inside that ceiling and reports the ones it left to
+   * post-generation validation, so the probe asserts an answer, not a survivor.
+   */
+  await gap('G30', 'a caller-supplied maxLength is answered, not fatal', async () => {
+    // Only a runtime that compiles a grammar could be killed by one. The MLX
+    // path is prompt-guided and survives anything, so probing it proves nothing.
+    let enforcing: string | null = null;
+    for (const candidate of chatCandidates) {
+      const report = await client
+        .request<ModelCapabilityReport>('GET', `/v1/models/${encodeURIComponent(candidate)}/capabilities`)
+        .catch(() => null);
+      if (report?.structured_output?.json_schema?.decoder_enforced === true) {
+        enforcing = candidate;
+        break;
+      }
+    }
+    if (!enforcing) return 'no model on this host enforces json_schema at decode time; not probeable here';
+
+    const schema = {
+      type: 'object',
+      additionalProperties: false,
+      required: [],
+      properties: { summary: { type: 'string', maxLength: 2000 } },
+    };
+
+    let answered: number | null = null;
+    let structured: StructuredOutputResult | undefined;
+    try {
+      const res = await client.raw('POST', '/v1/chat/completions', {
+        json: {
+          model: enforcing,
+          messages: [{ role: 'user', content: 'hi' }],
+          max_tokens: 8,
+          response_format: { type: 'json_schema', name: 'g30', strict: true, schema },
+        },
+      });
+      answered = res.status;
+      const body = (await res.json().catch(() => null)) as
+        | { structured_output?: StructuredOutputResult }
+        | null;
+      structured = body?.structured_output;
+    } catch {
+      // A dropped connection mid-request is the old broken behaviour itself.
+    }
+
+    const alive = await client
+      .request('GET', '/v1/health')
+      .then(() => true)
+      .catch(() => false);
+    if (!alive) {
+      return `maxLength 2000 ${answered == null ? 'dropped the connection' : `answered ${answered}`} and LewLM is no longer serving`;
+    }
+    if (answered == null) return 'maxLength 2000 dropped the connection';
+    // 422 is the other acceptable answer: a contract the decoder cannot be
+    // constrained to is a caller error, as long as it is *returned*.
+    if (answered === 422) return null;
+    if (answered !== 200) return `maxLength 2000 -> ${answered}`;
+    if (structured?.decoder_enforced !== true) {
+      return `maxLength 2000 answered 200 but dropped to ${structured?.enforcement ?? 'no'} enforcement`;
+    }
+    if ((structured.grammar_relaxations ?? []).length === 0) {
+      return 'maxLength 2000 was enforced at decode time without reporting a relaxation; check which bound survived';
+    }
+    return null;
+  });
 
   // --- summary ------------------------------------------------------------
 

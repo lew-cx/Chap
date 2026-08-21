@@ -13,16 +13,24 @@ argument. Every entry has a probe in `npm run proof` that flips from `gap` to
 `FIXD` when LewLM gains the capability, which is how we learn a workaround can be
 deleted.
 
-Verified against LewLM `0.4.1a0` on 2026-07-30.
+Verified against LewLM `0.4.1a0` on 2026-08-10. G30 was fixed in LewLM on
+2026-08-11 and re-verified against a local server; the run below predates that
+fix.
 
 ```
-  23 passed · 0 failed · 2 gaps confirmed · 15 gaps fixed upstream
+  23 passed · 0 failed · 3 gaps confirmed · 15 gaps fixed upstream
 ```
 
 **Two gaps remain.** G13 is a subsystem — a ring buffer with `Last-Event-ID`
 semantics — and should not be designed off a P2 note. G29 is what G28 turned
 into: the streamed text is now correct, but on the MLX path it is not
 incremental.
+
+G30 — the one that let any caller end the server with a single request — is
+closed. `npm run proof` no longer takes LewLM down, and no longer needs a
+restart between runs: its probe now asserts that the request is *answered*. See
+**Closed** for what the crash actually was, including the part this document
+proposed that would not have worked.
 
 G28 was fixed the day it was filed. The fix was a prompt-formatting mismatch
 rather than anything in the decoder — the non-streaming path templated the
@@ -154,10 +162,58 @@ and these are the costs that went away.
 | **G27** voices unlistable | the free-text voice box and the caveat under it, in the lab and the composer both | `GET /v1/audio/voices?model=` returning `AudioVoiceInventory`: 54 voices here, each naming its file and whether it came from the bundle or the backend cache. `enumerable` says whether LewLM could enumerate at all, so the picker degrades to free entry honestly rather than by guess. |
 | **G24** scan rewrote silently | the warning on the Ops rescan button, and the habit of copying `metadata.sqlite3` first | the whole manifest is compared minus discovery timestamps, so a rewritten field reports `updated`; a directory carrying `lewlm.quantization_profile.json` is recognized as LewLM's own conversion output. The two cache bundles came back `mlx` / runnable, and this host went from 2 chat-ready models to 4. |
 | **G28** streaming changed the answer | the composer's default-model choice was meeting a broken model first; nothing to delete, because the workaround would have been to hide two of four chat-ready models | one prompt for one conversation across all three MLX entrypoints. The streaming path decoded the untemplated blob verbatim while the batch path templated it internally, so the model saw no turn structure and continued raw text; both now render the real message list through the backend's own chat template. Superseded by G29, which is the same path delivering correct text all at once. |
+| **G30** a caller-supplied `maxLength` killed the server | the probe's "did LewLM survive" check, which is now an assertion that the request was *answered*, and the restart between proof runs | LewLM keeps the bounds it compiles into a grammar inside llama.cpp's parser ceiling, parses every finished grammar with llama.cpp's own parser before it can reach a decoder, and names what it left out in `structured_output.grammar_relaxations`. A contract the decoder cannot be constrained to at all comes back as `invalid_request` naming the offending rule. |
 | **G19** no serving-profile listing | the "recommendation from the run you just triggered" framing in Ops | `GET /v1/serving-profiles` with `model` / `capability` / `limit`. Listing only — pin and delete were left as a real design decision rather than guessed at. |
 | Kokoro-shaped bundles undiscoverable | copying `kokoro-v1_0.safetensors` to `weights.safetensors` in the models directory | published-bundle discovery: `config.json` + model-named weights + no tokenizer or processor is MLX/runnable. The bundle is used as published. |
 | KV-cache default | `LEWLM_KV_CACHE_QUANTIZATION_BITS=16` from the run instructions | default off; quantized KV pairs with `flash_attn` or is refused |
 | `int \| None` via env | — | `""` / `null` / `none` / `~` unset any optional setting |
+
+### What G30 actually was
+
+Worth writing down, because this document proposed two fixes and only one of
+them was right.
+
+The crash was real and as described: `{"summary": {"type": "string", "maxLength":
+2000}}` compiled to a grammar whose bounded string is one nested optional rule
+per permitted character, llama.cpp's parser refused it, and the process died. The
+death is downstream of the refusal — `llama_sampler_init_grammar` returns a
+*null sampler*, the bindings add it to the sampling chain anyway, and the next
+sample dereferences it. Nothing throws, so nothing can be caught; the fix has to
+be that the grammar never gets there.
+
+**The repetition operator does not help.** This document proposed compiling
+`maxLength` to `char{0,n}` instead of nested optionals, on the reasoning that it
+"removes the complexity entirely". It does not: llama.cpp expands `{m,n}` into
+the same per-item rules internally, and measured against the packaged build,
+`char{0,2000}` is refused with the same message as the nested form. The operator
+buys smaller grammar *text*, not a smaller grammar. Measured ceiling on this
+host: a bounded JSON string parses at 1000 repetitions and is refused by 1020,
+whichever spelling is used, and the limit is per rule rather than per grammar —
+seven fields at 1000 pass, one field at 2000 does not.
+
+So the bound cannot be enforced at decode time at generator-scale sizes at all,
+by any spelling. LewLM now compiles bounds up to 512, drops larger ones from the
+grammar, and reports each one in `structured_output.grammar_relaxations` as
+`properties.summary.maxLength (5000)`. The structure is still decode-enforced;
+the dropped bound is still enforced by `structured_output.validation` after
+generation. Nothing is silently unenforced.
+
+The second proposal was right and is what makes the class of bug go away: every
+grammar is now parsed by llama.cpp's own parser, and freed again, before it can
+reach a decoder. A refusal is returned as `invalid_request` naming the offending
+rule instead of taken out on the process — including for a grammar a caller
+writes by hand, which reached the same parser and was never checked either.
+
+Verified against a local LewLM on 2026-08-11: `maxLength: 2000` answers 200 with
+`decoder_enforced: true` and one relaxation; `root ::= item{0,100000}` answers
+422 naming `root`; `maxLength: 200` answers 200 with no relaxation and
+`validation: valid`; `/v1/health` is 200 after each.
+
+The shape of DocKtizo's `StatusReportSpec` — seven fields at `maxLength: 5000` —
+was checked directly against the packaged llama.cpp and is accepted now where it
+was refused before. That removes the blocker; it does not prove the integration
+produces a document, so `packages/module-docktizo` and `docs/docktizo-gaps.md`
+want a re-run rather than an edit.
 
 ### Why the proxy stayed
 
