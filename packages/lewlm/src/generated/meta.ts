@@ -9,9 +9,9 @@
 export const CONTRACT = {
   lewlmVersion: "0.4.1a0",
   bundleFormat: "lewlm-integration-bundle-v1",
-  routeCount: 56,
-  componentCount: 291,
-  bundleSha256: "fb281c431e63190bab8806635f552d3537606c0d532076c3492d09e6aee3e864",
-  openapiSha256: "ca4dae761c024af8dc32888aa3aa89f2c8e217c1092c6f2a2545ec7a0045623e",
-  generatedAt: "2026-07-30T20:36:50.410Z",
+  routeCount: 57,
+  componentCount: 293,
+  bundleSha256: "9bb321be09b09fa4de638779c32ca7a424304e52dbdc39b4f72d2c43ed2280f0",
+  openapiSha256: "5da8c9dcc81f7087d10e59623c0b2173e33c3537d70bd11cc6c760e58c69c465",
+  generatedAt: "2026-08-11T13:16:33.149Z",
 } as const;

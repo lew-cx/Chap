@@ -928,6 +928,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/requests/{request_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Request
+         * @description Cancel an in-flight request by the `x-request-id` handle it was sent with.
+         *
+         *     Idempotent, and safe to call before the target request arrives: an unknown
+         *     handle records an intent that stops a matching request on arrival. Repeat the
+         *     call to observe whether the request actually stopped — `cancelling` means the
+         *     signal was delivered, `cancelled` that a checkpoint acted on it, `completed`
+         *     that the request finished first.
+         *
+         *     Cancellation is best-effort and process-local: only the LewLM instance named
+         *     by `runtime_instance_id` can act on the handle, and work already committed to
+         *     one bounded backend call runs to completion.
+         */
+        post: operations["cancel_request_v1_requests__request_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -5115,6 +5145,35 @@ export interface components {
             total?: string | null;
         };
         /**
+         * RequestCancellationRecord
+         * @description Acknowledgement returned for a cancellation request.
+         *
+         *     The same handle can be cancelled repeatedly; each call returns the current
+         *     state rather than failing, so this doubles as the way to observe whether the
+         *     target actually stopped.
+         */
+        RequestCancellationRecord: {
+            /** Request Id */
+            request_id: string;
+            state: components["schemas"]["RequestCancellationState"];
+            /** Runtime Instance Id */
+            runtime_instance_id: string;
+            /** Application Id */
+            application_id?: string | null;
+            /** Requested At */
+            requested_at?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+        };
+        /**
+         * RequestCancellationState
+         * @description What LewLM knows about one request handle.
+         * @enum {string}
+         */
+        RequestCancellationState: "cancelling" | "pending" | "cancelled" | "completed";
+        /**
          * RequestModality
          * @enum {string}
          */
@@ -6688,6 +6747,8 @@ export interface components {
             fallback_used: boolean;
             /** Fallback Reason */
             fallback_reason?: string | null;
+            /** Grammar Relaxations */
+            grammar_relaxations?: string[];
             /** Parsed Output */
             parsed_output?: unknown | null;
             validation?: components["schemas"]["StructuredOutputValidation"];
@@ -6723,6 +6784,8 @@ export interface components {
             fallback_used: boolean;
             /** Fallback Reason */
             fallback_reason?: string | null;
+            /** Grammar Relaxations */
+            grammar_relaxations?: string[];
         };
         /**
          * StructuredOutputValidation
@@ -9398,6 +9461,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LifecycleOperationRecord"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_request_v1_requests__request_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestCancellationRecord"];
                 };
             };
             /** @description Validation Error */

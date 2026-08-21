@@ -739,6 +739,7 @@ export interface StructuredOutputResult {
   decoder_enforced?: boolean;
   fallback_used?: boolean;
   fallback_reason?: string | null;
+  grammar_relaxations?: string[];
   parsed_output?: unknown;
   validation?: StructuredOutputValidation;
 }

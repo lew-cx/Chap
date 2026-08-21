@@ -232,6 +232,18 @@ export const ERRORS = [
     "description": "The configured request rate for this client was exceeded."
   },
   {
+    "code": "request_cancelled",
+    "http_status": 499,
+    "retryable": false,
+    "description": "Raised when a request stopped at a checkpoint because its handle was cancelled."
+  },
+  {
+    "code": "request_handle_conflict",
+    "http_status": 409,
+    "retryable": false,
+    "description": "Raised when a cancellation handle is already active or reserved by another caller."
+  },
+  {
     "code": "request_too_large",
     "http_status": 413,
     "retryable": false,
@@ -333,6 +345,8 @@ export const ERROR_CODES = [
   "privacy_mode_enabled",
   "rate_limit_error",
   "rate_limited",
+  "request_cancelled",
+  "request_handle_conflict",
   "request_too_large",
   "response_too_large",
   "routing_error",
