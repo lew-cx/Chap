@@ -40,48 +40,66 @@ interface ErrorEnvelope {
   error?: { code?: string; message?: string };
 }
 
+interface ReadinessReport {
+  status?: string;
+  core_ready?: boolean;
+  generation_ready?: boolean;
+  detail_level?: string;
+  components?: { component: string; status: string; required_for_core?: boolean }[];
+}
+
 /**
- * Two calls, not one.
+ * One call.
  *
- * `GET /healthz` is process liveness only — DocKtizo's own docstring says
- * downstream readiness "will be added with runtime composition". It touches no
- * database, does not reach LewLM, and knows nothing about the worker. It is also
- * anonymous, so a service with authentication switched off answers `ok` while
- * every route Chap needs returns 503.
+ * This used to be two — liveness, then an authenticated read of the cheapest
+ * route, because `/healthz` checked nothing and could not tell a working
+ * service from one with no authentication configured. `/health/ready` now
+ * answers both, and answers the thing neither call could see: whether a worker
+ * is actually present. An API running without `python -m docktizo.worker`
+ * accepts generations and never executes them, which used to be invisible until
+ * you noticed nothing had happened.
  *
- * So the second call is the real one: an authenticated read of the cheapest
- * route there is. What comes back is what the browser shows, in DocKtizo's own
- * words — which turns "I forgot an environment variable" from a blank screen
- * into a sentence. See docs/docktizo-gaps.md, D1 and D5.
- *
- * What neither call can see is the worker. A generation submitted to an API
- * running without `python -m docktizo.worker` is accepted and then sits in
- * `accepted` forever, and nothing DocKtizo exposes reports that. That is D1.
+ * It is anonymous but tiered. With Chap's bearer it returns full detail; an
+ * offered-but-invalid credential still 401s, which is exactly what should be
+ * surfaced. So the failure Chap reports is the upstream's own sentence.
  */
 async function probe(baseUrl: string, headers: Record<string, string>): Promise<Readiness> {
-  const get = (path: string) =>
-    fetch(`${baseUrl}${path}`, { headers, signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-
+  let res: Response;
   try {
-    const live = await get('/healthz');
-    if (!live.ok) return { ready: false, reason: `DocKtizo answered ${live.status} at /healthz` };
+    res = await fetch(`${baseUrl}/health/ready`, {
+      headers,
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    });
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);
     return { ready: false, reason: `DocKtizo unreachable at ${baseUrl} — ${detail}` };
   }
 
-  try {
-    const reachable = await get('/v1/document-types');
-    if (reachable.ok) return { ready: true, reason: null };
+  const body = (await res.json().catch(() => ({}))) as ReadinessReport & ErrorEnvelope;
 
-    const body = (await reachable.json().catch(() => ({}))) as ErrorEnvelope;
-    return {
-      ready: false,
-      reason: body.error?.message ?? `DocKtizo answered ${reachable.status} at /v1/document-types`,
-    };
-  } catch (cause) {
-    return { ready: false, reason: cause instanceof Error ? cause.message : String(cause) };
+  if (!res.ok) {
+    return { ready: false, reason: body.error?.message ?? `DocKtizo answered ${res.status} at /health/ready` };
   }
+  // Name the components that are down rather than repeating the verdict. Which
+  // ones matter depends on the verdict: a broken database stops everything, an
+  // absent worker or an unreachable LewLM stops generation only.
+  const down = (core: boolean) =>
+    (body.components ?? [])
+      .filter((component) => Boolean(component.required_for_core) === core && component.status !== 'ready')
+      .map((component) => `${component.component} ${component.status}`)
+      .join(', ');
+
+  if (body.core_ready === false) {
+    return { ready: false, reason: down(true) || `DocKtizo reports ${body.status ?? 'not ready'}` };
+  }
+  if (body.generation_ready === false) {
+    // `worker unavailable` here means no process is heartbeating, which is the
+    // failure that used to be invisible: the API accepts generations and nothing
+    // ever runs them.
+    return { ready: false, reason: `${down(false) || 'generation is not available'} — nothing will run` };
+  }
+
+  return { ready: true, reason: null };
 }
 
 export function docktizo(context: ModuleContext) {

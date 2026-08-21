@@ -1,19 +1,21 @@
 /**
  * Watch one generation from `accepted` to an artifact.
  *
- * This file is the largest in the module and almost all of it is here because
- * DocKtizo has no streaming. LewLM publishes `/v1/events` and @chap/lewlm
- * subscribes in 41 lines; DocKtizo publishes a durable log you have to walk with
- * a cursor, so the poll loop, the cursor bookkeeping and the terminal-state
- * detection below are all Chap's. See docs/docktizo-gaps.md, D3.
+ * This file used to carry a 2-second poll loop, a page walk and its own cursor
+ * bookkeeping, because DocKtizo published a durable log and no way to follow it.
+ * It now streams: `GET /v1/generations/{id}/events/stream` tails the same log,
+ * and every `id:` is the same paged cursor, so a dropped connection resumes
+ * exactly where it stopped.
  *
- * The poll is local rather than `usePolled` on purpose: that hook goes through
- * the LewLM client and reports `LewLMApiError`, and coercing DocKtizo's envelope
- * into LewLM's error type would be exactly the kind of paraphrase Chap refuses
- * to do anywhere else.
+ * The reader is `readSSE` from @chap/lewlm — written for LewLM's chat and event
+ * streams, reused here without a line of change because DocKtizo now speaks the
+ * same wire format. That is the argument for keeping one client package rather
+ * than one per upstream.
  */
 
 import { useEffect, useState } from 'react';
+
+import { readSSE } from '@chap/lewlm';
 
 import { Disclosure } from '@/components/Disclosure.tsx';
 import { Stat } from '@/components/Field.tsx';
@@ -25,14 +27,21 @@ import { Table } from '@/components/Table.tsx';
 import { artifactDownloadUrl, docktizo } from '../client.ts';
 import { useWorkbench } from '../store.ts';
 import {
-  PIPELINE,
+  PIPELINE_ORDER,
   TERMINAL,
   type ArtifactMetadata,
   type GenerationEvent,
   type GenerationStatus,
 } from '../types.ts';
 
-const POLL_MS = 2000;
+/** What `stream_completed` carries when the log is done with us. */
+interface StreamCompleted {
+  reason: string;
+  checkpoint: string;
+}
+
+const isTerminal = (state: GenerationStatus['state']) =>
+  (TERMINAL as readonly string[]).includes(state);
 
 export function Generation() {
   const generationId = useWorkbench((state) => state.generationId);
@@ -65,50 +74,47 @@ function Watch({ generationId }: { generationId: string }) {
   const [status, setStatus] = useState<GenerationStatus | null>(null);
   const [events, setEvents] = useState<GenerationEvent[]>([]);
   const [checkpoint, setCheckpoint] = useState<string | null>(null);
+  const [done, setDone] = useState<StreamCompleted | null>(null);
   const [artifacts, setArtifacts] = useState<ArtifactMetadata[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const terminal = status != null && TERMINAL.includes(status.state);
+  const terminal = status != null && isTerminal(status.state);
 
-  // One loop for status and the event log. It stops itself at a terminal state
-  // rather than polling a finished generation forever.
   useEffect(() => {
-    let live = true;
-    let cursor: string | null = null;
+    const controller = new AbortController();
 
-    const read = async () => {
+    const follow = async () => {
       try {
-        const next = await docktizo.generations.get(generationId);
-        if (!live) return;
-        setStatus(next);
+        setStatus(await docktizo.generations.get(generationId));
 
-        // Walk every page that has appeared since the last read. `has_more` is
-        // the only thing that says whether the log has caught up.
-        for (;;) {
-          const page = await docktizo.generations.events(generationId, cursor);
-          if (!live) return;
-          if (page.items.length > 0) setEvents((current) => [...current, ...page.items]);
-          setCheckpoint(page.checkpoint ?? null);
-          cursor = page.next_cursor ?? cursor;
-          if (!page.has_more) break;
+        // No cursor: start from the beginning of the log. A live generation and
+        // one that finished an hour ago replay identically, which is why there
+        // is no separate "load history" path.
+        const res = await docktizo.generations.stream(generationId, null, controller.signal);
+
+        for await (const frame of readSSE(res)) {
+          if (frame.event === 'stream_completed') {
+            const completion = JSON.parse(frame.data) as StreamCompleted;
+            setCheckpoint(completion.checkpoint);
+            setDone(completion);
+            break;
+          }
+          setEvents((current) => [...current, JSON.parse(frame.data) as GenerationEvent]);
+          if (frame.id) setCheckpoint(frame.id);
         }
 
-        if (TERMINAL.includes(next.state)) {
-          clearInterval(timer);
-          const found = await Promise.all(next.artifact_ids.map((id) => docktizo.artifacts.get(id)));
-          if (live) setArtifacts(found);
-        }
+        const final = await docktizo.generations.get(generationId);
+        setStatus(final);
+        setArtifacts(await Promise.all(final.artifact_ids.map((id) => docktizo.artifacts.get(id))));
       } catch (cause) {
-        if (live) setFailure(cause instanceof Error ? cause.message : String(cause));
+        // An abort is an unmount, not a failure.
+        if (controller.signal.aborted) return;
+        setFailure(cause instanceof Error ? cause.message : String(cause));
       }
     };
 
-    void read();
-    const timer = setInterval(() => void read(), POLL_MS);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
+    void follow();
+    return () => controller.abort();
   }, [generationId]);
 
   if (!status) {
@@ -167,7 +173,10 @@ function Watch({ generationId }: { generationId: string }) {
 
       <Section
         title="events"
-        hint={`${events.length} · polled every ${POLL_MS / 1000}s · checkpoint ${checkpoint ?? '—'}`}
+        hint={
+          `${events.length} · ${done ? `stream ${done.reason}` : 'streaming'}` +
+          ` · resume ${checkpoint?.slice(0, 12) ?? '—'}`
+        }
       >
         <Table
           columns={[
@@ -185,7 +194,7 @@ function Watch({ generationId }: { generationId: string }) {
             { key: 'error', label: 'error', render: (row) => row.error_code ?? '—' },
           ]}
           rows={events}
-          empty="none yet — an API running without `python -m docktizo.worker` never emits any"
+          empty="none yet"
         />
       </Section>
 
@@ -219,13 +228,13 @@ function Watch({ generationId }: { generationId: string }) {
   );
 }
 
-/** Where the run got to. `repairing` is a loop back into validating, not a step. */
+/** Where the run got to. The order is DocKtizo's, from its published contract. */
 function Pipeline({ state }: { state: GenerationStatus['state'] }) {
-  const reached = PIPELINE.indexOf(state as (typeof PIPELINE)[number]);
+  const reached = (PIPELINE_ORDER as readonly string[]).indexOf(state);
 
   return (
     <div className="flex flex-wrap gap-1">
-      {PIPELINE.map((step, index) => (
+      {PIPELINE_ORDER.map((step, index) => (
         <span
           key={step}
           className="chip"

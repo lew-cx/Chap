@@ -8,7 +8,8 @@
 
 import { create } from 'zustand';
 
-import type { DocumentTypeDetail, SourceSummary } from './types.ts';
+import { docktizo } from './client.ts';
+import type { DocumentTypeDetail, SourceSummary, Whoami } from './types.ts';
 
 interface WorkbenchState {
   /** Chosen in the types tab, used by the generate tab. */
@@ -17,18 +18,27 @@ interface WorkbenchState {
   sources: SourceSummary[];
   /** Submitted in the generate tab, watched by the generation tab. */
   generationId: string | null;
+  /** What the token resolved to. Read once; it cannot change without a restart. */
+  whoami: Whoami | null;
 
   select: (documentType: DocumentTypeDetail) => void;
   addSource: (source: SourceSummary) => void;
   watch: (generationId: string) => void;
+  identify: () => void;
 }
 
-export const useWorkbench = create<WorkbenchState>((set) => ({
+export const useWorkbench = create<WorkbenchState>((set, get) => ({
   documentType: null,
   sources: [],
   generationId: null,
+  whoami: null,
 
   select: (documentType) => set({ documentType }),
   addSource: (source) => set((state) => ({ sources: [source, ...state.sources] })),
   watch: (generationId) => set({ generationId }),
+
+  identify: () => {
+    if (get().whoami) return;
+    void docktizo.whoami().then((whoami) => set({ whoami })).catch(() => undefined);
+  },
 }));

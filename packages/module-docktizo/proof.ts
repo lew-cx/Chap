@@ -16,13 +16,13 @@
  *   npx tsx packages/module-docktizo/proof.ts [--base http://127.0.0.1:8090] [--token …]
  */
 
+import { readSSE } from '../lewlm/src/index.ts';
 import { check, flag, gap, record, summarize } from '../../scripts/probe.ts';
+import { DOCKTIZO_CONTRACT } from './src/generated/meta.ts';
 
 const BASE = flag('base', 'http://127.0.0.1:8090');
 const TOKEN = flag('token', process.env['DOCKTIZO_TOKEN'] ?? '');
 const WORKSPACE = flag('workspace', process.env['DOCKTIZO_WORKSPACE_ID'] ?? '');
-/** Only D6 needs this: it compares two upstreams' vocabularies against each other. */
-const LEWLM = flag('lewlm', process.env['LEWLM_BASE_URL'] ?? 'http://127.0.0.1:8080');
 
 const headers: Record<string, string> = {
   ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}),
@@ -61,39 +61,90 @@ async function main() {
 
   // --- gaps ---------------------------------------------------------------
 
-  await gap('D1', 'healthz reports liveness only, never downstream readiness', async () => {
-    // The only anonymous endpoint, and the one an operator reaches for first. A
-    // readiness-aware answer would have to name its dependencies; this one
-    // cannot distinguish a working service from one with no worker, no database
-    // and no authentication configured.
-    const res = await get('/healthz');
-    const health = await body(res);
-    const keys = Object.keys(health).sort();
-    const aware = keys.some((key) => /depend|ready|worker|lewlm|database/i.test(key));
-    return aware ? null : `answers ${res.status} with only [${keys.join(', ')}] — nothing about the worker`;
+  await gap('D1', 'health reports liveness only, never downstream readiness', async () => {
+    // A readiness-aware answer has to name its dependencies, and in particular
+    // has to know whether a worker is present — an API running without one
+    // accepts generations and never executes them.
+    const res = await get('/health/ready');
+    if (!res.ok) return `GET /health/ready -> ${res.status}`;
+    const report = (await body(res)) as {
+      components?: unknown[];
+      generation_ready?: boolean;
+      detail_level?: string;
+    };
+    if (report.generation_ready === undefined) return 'readiness does not report worker presence';
+    if (report.detail_level === undefined) return 'readiness does not label withheld detail';
+    return null;
   });
 
   await gap('D2', 'no committed spec and no published client', async () => {
-    // The document exists only inside a running process. If DocKtizo ever ships
-    // one at a stable URL alongside the service, this stops being a gap.
+    // The point is a spec in the repo, gated against the running app — not one
+    // that exists only inside a process. This probe checks the running app still
+    // agrees with what Chap generated from the committed copy.
     const res = await fetch(`${BASE}/openapi.json`);
-    if (!res.ok) return `GET /openapi.json -> ${res.status}; nothing is published outside the process`;
-    const spec = (await body(res)) as { info?: { version?: string } };
-    return `only from a running process (version ${spec.info?.version ?? '?'}), never from the repo`;
+    if (!res.ok) return `GET /openapi.json -> ${res.status}`;
+    const live = (await body(res)) as { paths?: Record<string, unknown> };
+    const liveRoutes = Object.keys(live.paths ?? {}).length;
+    if (liveRoutes !== DOCKTIZO_CONTRACT.routeCount) {
+      return `Chap generated from ${DOCKTIZO_CONTRACT.routeCount} routes, the live app serves ${liveRoutes}`;
+    }
+    return null;
   });
 
   await gap('D3', 'generation events are polled, never streamed', async () => {
-    // A streaming surface would advertise itself the way LewLM's /v1/events does.
-    const res = await fetch(`${BASE}/v1/events`, { headers: { ...headers, accept: 'text/event-stream' } });
-    if (res.ok && (res.headers.get('content-type') ?? '').includes('text/event-stream')) return null;
-    return `no event stream (GET /v1/events -> ${res.status}); progress must be walked with a cursor`;
+    if (!authed) return 'not verifiable without a working token';
+
+    // Stream a real generation, so this proves the transport rather than the
+    // existence of a route. The generation only has to reach the log; whether
+    // the workflow eventually succeeds is not what is under test here.
+    const submitted = await fetch(`${BASE}/v1/generations`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json', 'idempotency-key': `proof-d3-${Date.now()}` },
+      body: JSON.stringify({
+        document_type: 'status_report.v1',
+        input_data: {
+          project_name: 'chap proof',
+          reporting_period: 'probe',
+          reporting_date: new Date().toISOString().slice(0, 10),
+          facts: ['A probe submitted this generation to prove the event stream.'],
+        },
+      }),
+    });
+    if (!submitted.ok) {
+      // A submit-time capability refusal is D6's fix working, not D3 failing.
+      const envelope = (await body(submitted)) as { error?: { code?: string } };
+      return `could not submit a generation to stream (${submitted.status} ${envelope.error?.code ?? ''})`;
+    }
+    const { generation_id: id } = (await body(submitted)) as { generation_id: string };
+
+    const res = await fetch(`${BASE}/v1/generations/${id}/events/stream`, {
+      headers: { ...headers, accept: 'text/event-stream' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    const contentType = res.headers.get('content-type') ?? '';
+    if (!contentType.includes('text/event-stream')) {
+      void res.body?.cancel();
+      return `GET .../events/stream -> ${res.status} ${contentType || 'no content-type'}`;
+    }
+
+    // One frame is the whole claim: the log is followable, and `id:` is a cursor
+    // a reconnect can resume from. Breaking out releases the connection —
+    // readSSE cancels its own reader in a finally, so nothing is cancelled here.
+    for await (const frame of readSSE(res)) {
+      return frame.id ? null : 'streams, but frames carry no id: cursor to resume from';
+    }
+    return 'stream opened but yielded no frames';
   });
 
   await gap('D4', 'no response says which workspace the token resolved to', async () => {
-    if (!authed) return 'not verifiable without a working token; X-Workspace-ID is write-only in the schema';
-    const res = await get('/v1/document-types');
-    const named = [...res.headers.keys()].some((key) => /workspace/i.test(key));
-    return named ? null : 'neither the body nor any response header names the effective workspace';
+    if (!authed) return 'not verifiable without a working token';
+    const res = await get('/v1/whoami');
+    if (!res.ok) return `GET /v1/whoami -> ${res.status}`;
+    const who = (await body(res)) as { workspace_id?: string };
+    const echoed = (await get('/v1/document-types')).headers.get('x-workspace-id');
+    if (!who.workspace_id) return 'whoami does not name the workspace';
+    if (!echoed) return 'authenticated responses do not echo X-Workspace-ID';
+    return null;
   });
 
   await gap('D5', 'request size limits are keyed to content-length', async () => {
@@ -126,30 +177,19 @@ async function main() {
     return `600 KiB past a 512 KiB cap: ${declared.status} with content-length, ${streamed.status} without`;
   });
 
-  await gap('D6', 'required_capabilities are not in LewLM\'s vocabulary', async () => {
+  await gap('D6', 'a workflow the host cannot run is accepted anyway', async () => {
     if (!authed) return 'not verifiable without a working token';
-    const res = await get('/v1/document-types');
-    const list = (await body(res)) as { items?: { required_capabilities?: string[] }[] };
-    const required = new Set((list.items ?? []).flatMap((item) => item.required_capabilities ?? []));
-    if (required.size === 0) return null;
-
-    // LewLM annotates its inventory with the capability names it can actually
-    // report on. If DocKtizo's names are not among them, no client can check a
-    // workflow is runnable before submitting one.
-    const lewlm = await fetch(`${LEWLM}/v1/models`).catch(() => null);
-    if (!lewlm?.ok) return `LewLM unreachable at ${LEWLM}; cannot compare vocabularies`;
-    const inventory = (await lewlm.json()) as {
-      capability_availability?: { ready_capabilities?: string[]; blocked_capabilities?: string[] }[];
-    };
-    const published = new Set(
-      (inventory.capability_availability ?? []).flatMap((entry) => [
-        ...(entry.ready_capabilities ?? []),
-        ...(entry.blocked_capabilities ?? []),
-      ]),
-    );
-    const unknown = [...required].filter((name) => !published.has(name));
-    if (unknown.length === 0) return null;
-    return `DocKtizo requires [${unknown.join(', ')}]; LewLM publishes [${[...published].join(', ')}]`;
+    // The fix DocKtizo chose: check capabilities at submit and refuse with a
+    // typed error naming what is missing, rather than failing several stages in.
+    // Readiness reporting the same thing per workflow is what lets Chap warn
+    // before the button is pressed.
+    const res = await get('/health/ready');
+    if (!res.ok) return `GET /health/ready -> ${res.status}`;
+    const report = (await body(res)) as { workflows?: { missing_capabilities?: string[] }[] };
+    if (report.workflows === undefined) {
+      return 'readiness does not report per-workflow capability coverage';
+    }
+    return null;
   });
 
   if (!authed) {

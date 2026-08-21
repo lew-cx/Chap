@@ -22,8 +22,11 @@ export function DocumentTypes() {
   const [failure, setFailure] = useState<string | null>(null);
   const selected = useWorkbench((state) => state.documentType);
   const select = useWorkbench((state) => state.select);
+  const whoami = useWorkbench((state) => state.whoami);
+  const identify = useWorkbench((state) => state.identify);
 
   useEffect(() => {
+    identify();
     docktizo.documentTypes
       .list()
       .then((result) => setItems(result.items))
@@ -32,6 +35,26 @@ export function DocumentTypes() {
 
   return (
     <>
+      {whoami && (
+        /**
+         * The credential, resolved. A request cannot name its workspace — the
+         * token decides — so the only honest place to show it is here. The scope
+         * list is not decoration: DocKtizo splits `events:read` and
+         * `artifacts:download` out from the obvious ones, and a token missing
+         * either fails deep in a screen with `authorization_denied` and no
+         * indication of which action was denied.
+         */
+        <Section title="acting as" hint={whoami.authentication_method}>
+          <div className="panel grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Stat label="workspace" value={whoami.workspace_id} />
+            <Stat label="subject" value={whoami.subject_id} />
+            <Stat label="roles" value={(whoami.roles ?? []).join(' · ') || '—'} />
+            <Stat label="scopes" value={(whoami.scopes ?? []).length} />
+          </div>
+          <p className="micro-label mt-2">{(whoami.scopes ?? []).join(' · ')}</p>
+        </Section>
+      )}
+
       <Section title="document types" hint={`${items.length} installed`}>
         <Table
           columns={[

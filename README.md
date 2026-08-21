@@ -36,8 +36,8 @@ domain code in this repo:
 ```
     646  lewlm              (budget 900)
     478  module-collections (budget 500)   retrieval: chunks in node:sqlite
-    788  module-docktizo    (budget 850)   a document service, 13 of its 21 routes
-   1912  everything Chap hand-wrote
+    936  module-docktizo    (budget 950)   a document service, 14 of its 26 routes
+   2060  everything Chap hand-wrote
 ```
 
 A consumer who wants a chat and operations GUI deletes two directories and four
@@ -45,13 +45,20 @@ lines and still has a coherent product. `npm run module:check` fails the build i
 a core file learns a module's name, so that stays true rather than merely being
 claimed. See [docs/modules.md](docs/modules.md).
 
-The per-package split is the interesting number. `@chap/lewlm` is 646 lines for
-56 LewLM routes; `module-docktizo` is 788 for 13 DocKtizo routes. DocKtizo is not
-harder — it publishes no integration bundle, no event stream, and no capability
-vocabulary a client can join against. Each absence is a numbered entry in
-[docs/docktizo-gaps.md](docs/docktizo-gaps.md) with the lines it costs written
-next to it. That contrast is the argument this repo exists to make, and it only
-became visible once each module carried its own budget.
+The per-package split is the interesting number, and it does not say what you
+would expect. `module-docktizo` opened with six gaps against its upstream; all
+six were closed within a day, and the module got **bigger** — 788 lines to 936.
+The workarounds shrank: a hand-maintained copy of DocKtizo's state machine, a
+2-second poll loop with its own cursor bookkeeping, and a two-call readiness
+probe all went. What replaced them is larger, because each fix made something
+possible that had not been worth building before — a readiness report that names
+the component that is down, a pre-submit capability warning, validation errors
+that say which field.
+
+So a closed gap does not always return lines. Sometimes it returns capability,
+and the count of things Chap has to guess about its upstream — which is what
+[docs/docktizo-gaps.md](docs/docktizo-gaps.md) actually measures — goes from six
+to zero while the line count rises.
 
 That number goes *down* when LewLM gains a capability. Wiring `tool_calls` into
 LewLM deleted ~150 lines Chap would otherwise have written; normalizing its

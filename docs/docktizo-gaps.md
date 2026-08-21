@@ -14,219 +14,76 @@ Each open entry states what Chap needs, what is missing, a proposed shape, and
 a probe in `npm run proof:dk` that flips from `gap` to `FIXD` when DocKtizo gains
 the capability, which is how we learn a workaround can be deleted.
 
-Verified against DocKtizo `0.1.0a0` on 2026-08-09, with LewLM `0.4.1a0` behind it.
+Verified against DocKtizo `0.1.0a0` (`0018_worker_presence`) on 2026-08-10.
 
 ```
-  2 passed · 0 failed · 6 gaps confirmed · 0 gaps fixed upstream
+  2 passed · 0 failed · 0 gaps confirmed · 6 gaps fixed upstream
 ```
 
-**Six gaps on day one, and the line count shows it.** `@chap/lewlm` is 646 lines
-and covers 56 LewLM routes. `packages/module-docktizo` is 788 lines and covers
-13 of DocKtizo's 21. The difference is not that DocKtizo is harder — it is that
-LewLM publishes an integration bundle, an event stream and a capability
-inventory, and DocKtizo publishes none of the three. Every gap below names the
-lines it costs.
+**Nothing is open.** All six entries this document opened on 2026-08-09 were
+closed within a day, and each one is recorded below with what Chap deleted.
 
-The most serious is **D5**, which is not a missing feature but a defect: Chap's
-proxy re-streams request bodies and therefore cannot send `content-length`, and
-DocKtizo's request-size middleware only fires when that header is present. Every
-request Chap forwards bypasses the size guard. Chap cannot fix this without
-putting logic in a byte pipe that forbids it.
+Two of them — D5 and D6, including the one this document called "the most
+serious" — were already fixed at DocKtizo's HEAD when they were filed. Chap had
+probed an older build. That is worth recording rather than quietly deleting: a
+gap report is only as good as the build it was measured against, and the probe
+that would have caught it is the same probe that now proves the fix.
 
-**D1 is the one an operator meets first.** A DocKtizo running without
-`python -m docktizo.worker` answers `/healthz` with `ok` and accepts generations
-that then sit in `accepted` forever. Confirmed by hand: a generation submitted
-before the worker started stayed `accepted` indefinitely and advanced within
-seconds of the worker booting.
+The interesting result is that **closing all six made the module bigger, not
+smaller** — 788 lines to 882. The workarounds did shrink; what grew was
+everything the fixes made possible. See the note at the end, because it
+complicates this project's usual argument and is the more honest finding.
 
 ---
 
 ## Open
 
-### D1 · healthz reports liveness only, never downstream readiness
-
-```
-GET /healthz -> 200 {"status":"ok","service":"docktizo","version":"0.1.0a0"}
-```
-
-That is the whole response, and it is the only anonymous endpoint. It touches no
-database, does not reach LewLM, and knows nothing about the worker — the route's
-own docstring says downstream readiness "will be added with runtime
-composition" (`src/docktizo/api/routes/health.py:1`).
-
-The failure this hides is the common one. The API accepts a generation and never
-executes it; a separately supervised worker claims `accepted` rows by DB lease.
-Run one without the other and every submission is accepted, acknowledged with a
-`status_url`, and then silent. Observed directly during this integration: three
-generations sat at `accepted` until `python -m docktizo.worker` was started, at
-which point they advanced through `planning` and `gathering_sources` within six
-seconds.
-
-A missing database is worse. Against an un-migrated database, `POST /v1/sources`
-answers a bare `Internal Server Error` — not DocKtizo's error envelope, with a
-SQLAlchemy `no such table: source_references` in the log — so a client cannot
-distinguish a misconfigured service from a broken one.
-
-**Proposed.** Make `/healthz` report its dependencies: database reachable and
-migrated, LewLM reachable, and at least one worker holding a recent lease. The
-lease table already carries the timestamps this needs. Keep it anonymous; a
-readiness answer is not sensitive.
-
-**Cost.**
-- The module's probe makes two calls instead of one, and the second one only
-  exists to detect the *authentication* half of this (`src/server.ts`, ~15 lines).
-- Neither call can see the worker. Chap reports a DocKtizo with no worker as
-  **ready**, which is wrong, and there is nothing available to make it right.
-- `Generation.tsx`'s empty state has to guess: *"none yet — an API running
-  without `python -m docktizo.worker` never emits any"*. Chap is documenting an
-  operational failure in an empty-table message because the contract cannot.
-
-### D2 · no committed spec, no published client
-
-DocKtizo's OpenAPI document exists only inside a running FastAPI process. There
-is no committed `openapi.json`, no integration bundle, no generated client, and
-no CLI. Compare LewLM, which publishes `examples/integration-bundle.json`
-carrying the 19 root schemas — including every streaming and request shape
-OpenAPI omits — plus a normalized OpenAPI document with 56 routes.
-
-**Proposed.** Commit the spec, generated by a build step from `create_app()`, and
-gate it in CI the way LewLM's contract job does. A bundle covering the shapes
-OpenAPI cannot express would be better still, but the committed spec is the part
-that costs nothing and unblocks every consumer.
-
-**Cost.**
-- `scripts/gen-types.mjs` grew a second target (~70 lines), with its own
-  resolution chain and its own vendored snapshot at `vendor/docktizo-openapi.json`.
-- The drift gate is weaker than LewLM's. With no DocKtizo checkout and no running
-  service, `--check` compares the snapshot against itself and always passes. It is
-  a "nobody hand-edited `generated/`" guard, not a contract gate.
-- `src/types.ts` hand-maintains `PIPELINE` and `TERMINAL` — the pipeline order and
-  the terminal states. DocKtizo enforces both in a transition table it does not
-  publish, so Chap's stepper is Chap's *reading* of the state machine rather than
-  the contract's own word. This is the only place in the module that restates
-  something the upstream already knows.
-
-### D3 · generation progress is polled, never streamed
-
-```
-GET /v1/events  (accept: text/event-stream)  ->  404
-```
-
-DocKtizo publishes a durable, cursor-walked event log
-(`GET /v1/generations/{id}/events?cursor=`) with an opaque base64 `checkpoint`
-and `has_more`. It is a good log. It is not a stream, and there are no webhooks.
-LewLM, which DocKtizo depends on, has `/v1/events`.
-
-Observed on a real run: six events over fifteen seconds — `GENERATION_ACCEPTED`,
-`GENERATION_PLANNING`, `RETRIEVAL_STARTED`, `RETRIEVAL_COMPLETED`,
-`SECTION_GENERATION_STARTED`, `GENERATION_FAILED`. All six were only visible on
-the next 2-second tick.
-
-**Proposed.** An SSE surface over the same durable log, taking the same cursor,
-so a client can either poll or subscribe against one ordering. The log already
-has the sequence numbers and the checkpoint this needs.
-
-**Cost.**
-- The poll loop, page walk, cursor bookkeeping and terminal-state detection in
-  `ui/Generation.tsx` — about 40 lines, and the largest single reason that file is
-  the biggest in the module.
-- It could not reuse `usePolled`. That hook routes through the LewLM client and
-  reports `LewLMApiError`; coercing DocKtizo's envelope into LewLM's error type
-  would be exactly the paraphrase Chap refuses everywhere else. So the loop is
-  hand-written.
-- Stage transitions are invisible below the poll interval. On the run above,
-  `retrieving` and `generating` were never displayed — the tick landed after both.
-
-### D4 · no response says which workspace the token resolved to
-
-Every route is scoped by `workspace_id`, which is derived from the bearer token
-and never accepted from the caller — `X-Actor-ID` is rejected outright with
-`caller_identity_forbidden`, and a body carrying `workspace_id` is refused. This
-is the right design. But `X-Workspace-ID` is write-only: no response body and no
-response header names the workspace that was actually used.
-
-**Proposed.** Echo the resolved workspace, in a response header on every
-authenticated route or in the body of a `GET /v1/whoami`. The information already
-exists in `RequestContext`.
-
-**Cost.**
-- Chap cannot show an operator which workspace they are acting in. On a bench
-  with several tokens that is a live way to lose an hour.
-- `DOCKTIZO_WORKSPACE_ID` is configured in Chap's server and forwarded blind. If
-  it is wrong, the only symptom is data appearing somewhere unexpected.
-
-### D5 · request size limits are keyed to `content-length`
-
-The defect. Same 600 KiB body, same route, twice:
-
-```
-POST /v1/generations  (512 KiB cap)
-  with content-length     ->  413  request_too_large
-  streamed, no length     ->  422  (the guard never fired)
-```
-
-`src/docktizo/api/app.py:116` reads `content-length` and skips the check when the
-header is absent:
-
-```python
-content_length = request.headers.get("content-length")
-...
-if content_length is not None and content_length.isdecimal() and int(content_length) > request_limit:
-```
-
-Chap's proxy re-streams request bodies, and a streamed body has no length to
-declare — `server/src/proxy.ts:38` drops `content-length` for exactly that
-reason. So **every request Chap forwards to DocKtizo bypasses DocKtizo's own size
-guard**, including the 10 MiB source cap.
-
-**Proposed.** Enforce on the body as it is consumed, counting bytes and aborting
-past the limit, rather than trusting a header a proxy is not obliged to send.
-Keep the `content-length` fast path as an early rejection.
-
-**Cost.**
-- Chap cannot fix this. Re-adding a limit means putting logic into a byte pipe
-  whose header comment forbids reshaping, synthesizing and "helpfully" fixing
-  anything — and a workaround hidden in the proxy is invisible to
-  `npm run loc:budget`, which is the mechanism that makes these costs legible.
-- So the cost is carried by DocKtizo, not Chap: a deployment fronted by any
-  streaming proxy has no request-size enforcement at all.
-
-### D6 · `required_capabilities` uses a vocabulary LewLM does not publish
-
-```
-DocKtizo requires  [structured_output, document_rendering]
-LewLM  publishes   [chat, streaming, vision, embeddings, audio_speech, audio_transcription]
-```
-
-`GET /v1/document-types/{id}` returns `required_capabilities`, which is exactly
-the right idea — and the names are not the ones LewLM annotates its model
-inventory with. Nothing can join the two.
-
-The consequence, observed: on a host with no structured-output-capable model,
-`status_report.v1` was accepted, planned, retrieved, and failed at
-`structured_generation_failed` fifteen seconds in. `GET /v1/models` on LewLM
-could have answered that before the submit.
-
-**Proposed.** Either name capabilities in LewLM's vocabulary, or have DocKtizo
-check them itself at submit time and reject with a typed error naming the missing
-capability. The second is better — DocKtizo already knows both sides.
-
-**Cost.**
-- Chap has this exact pattern already: `useCapability` reads
-  `capability_availability[]` off `/v1/models` and `CapabilityNotice` says "this
-  host cannot do that, and here is why" *before* you press the button. The
-  DocKtizo module cannot use it, because the two vocabularies do not meet.
-- So the generate tab lets you submit a request that cannot succeed, and the
-  failure arrives several stages later with a code that describes the symptom
-  rather than the cause.
+None.
 
 ---
 
 ## Closed
 
-Nothing yet. This section will hold what Chap deleted when a gap was fixed, and
-what replaced it — the format `docs/lewlm-gaps.md` uses, and the reason that
-document is worth keeping.
+| | What Chap deleted | What replaced it |
+|---|---|---|
+| **D1** | A two-call probe — liveness, then an authenticated read of the cheapest route — because `/healthz` checked nothing and could not tell a working service from an unconfigured one. And a guess in an empty-table message: *"an API running without `python -m docktizo.worker` never emits any"*. | One call to `/health/ready`, which is anonymous but tiered, and a `worker_heartbeats` table behind it. Chap now names the component that is down: **`lewlm unavailable — nothing will run`**, or the worker when no process is heartbeating. The failure that was invisible — an API accepting generations that nothing will ever run — is reported in the nav before you click anything. |
+| **D2** | A resolution chain that could only reach a *running process*, and a drift gate that compared a vendored snapshot against itself. | `docs/api/openapi.json` and `docs/api/contract.json`, committed and gated by DocKtizo's own `make contract-check`. `gen:types --target docktizo` reads the repo first and vendors both. |
+| **D2** | **The hand-maintained state machine.** `types.ts` carried a `PIPELINE` tuple and a `TERMINAL` list because neither was published. The hand-written version was **wrong**: it omitted `changes_requested` from the terminal set, so a generation that came back for changes would have been followed forever. | `generated/contract.ts`, from `contract.json` — `pipeline_order`, `terminal`, `resting`, the full transition table, and the error, event and capability vocabularies. Nothing about the state machine is hand-written now, and the bug went with it. |
+| **D3** | The poll loop: a 2-second tick, a `has_more` page walk, its own cursor bookkeeping, and terminal-state detection to decide when to stop. Stage transitions below the tick were simply never displayed. | `GET /v1/generations/{id}/events/stream`, read with **`readSSE` from `@chap/lewlm`** — written for LewLM's chat and event streams, reused for DocKtizo without a line of change, because DocKtizo now speaks the same wire format. Frames carry the paged cursor as `id:`, so the UI shows a resume point and a `stream_completed` reason. |
+| **D4** | Nothing — there was no workaround to delete, only a thing Chap could not show. | `/v1/whoami` and an `X-Workspace-ID` echo on every authenticated response. The DocKtizo screen now opens with **acting as**: workspace, subject, method, roles and the full scope list. That last part is not decoration — see the note below. |
+| **D5** | Nothing. Chap could not work around it: re-adding a size limit means putting logic into a byte pipe whose header comment forbids exactly that. | The guard counts streamed bytes rather than trusting `content-length`, so a body forwarded by any streaming proxy is enforced like any other. Already fixed at HEAD when filed. |
+| **D6** | A generate tab that would happily submit a request that could not succeed, and a failure arriving several stages later with a code describing the symptom. | Submit-time rejection with `provider_capability_missing` and `missing_capabilities` — the option this document argued for — plus per-workflow coverage in the readiness report. Chap now warns *before* the button, through the same `CapabilityNotice` it uses for LewLM. That component was already there; it just finally had something to read. |
+| — | `issue_count: N` and no indication of which N. | Index-aligned `issue_locations` and `issue_codes`, values and human messages deliberately withheld. The generate tab renders them as a two-column table: field, problem. Submitting a status report with only `project_name` now says `reporting_period missing · reporting_date missing · facts missing` instead of "3". |
+| — | A second way to read the same log. Chap's client had both a paged `events()` and the stream. | Just the stream. The two are interchangeable by design, so keeping both was Chap storing a choice nobody makes. |
+
+---
+
+### The number went up, and that is the honest result
+
+`packages/module-docktizo` was 788 lines with six open gaps and is 882 with none.
+That is the opposite of what this project's argument usually predicts, and the
+reason is worth stating plainly rather than explaining away.
+
+The workaround code did shrink. The hand-maintained state machine is gone, the
+poll loop is gone, the two-call probe is one call, and the duplicate log reader
+is gone. What replaced them is larger, because six fixes each made something
+possible that had not been worth building before:
+
+- readiness that names a component, so the module reports *why* rather than *that*
+- an identity panel, which needed an endpoint that would answer it
+- a pre-submit capability warning, which needed a vocabulary the two services shared
+- located validation issues, which needed the locations
+- a resume checkpoint and a completion reason, which needed a stream
+
+None of that is a workaround. All of it is the module doing more because the
+contract reaches further. The budget moved 850 → 950 to hold it, which is the
+right reason to move a budget and the only one this repo accepts.
+
+The lesson for `docs/lewlm-gaps.md`'s framing: a closed gap does not always
+return lines. Sometimes it returns *capability*, and the line count goes up while
+the amount of guessing goes down. The count of things Chap has to know that its
+upstream will not tell it — which is what these documents actually measure — went
+from six to zero.
 
 ---
 
@@ -234,38 +91,79 @@ document is worth keeping.
 
 Findings that are not contract gaps but cost time, recorded so they cost it once.
 
-**Enabling authentication is spelled `auth_provider=none`.** `DOCKTIZO_AUTH_PROVIDER`
-accepts only `none` or `external`; `local` is a validation error at startup. Local
-bearer auth is switched on by a *separate* flag, so the working development
-configuration reads:
+**The scope list is longer than it looks.** `events:read` and `artifacts:download`
+are separate authorization actions from `generations:read` and `artifacts:read`. A
+token with the obvious scopes gets `403 authorization_denied` on both the paged
+event read and the stream, and the envelope does not name the action that was
+denied — so the symptom is a screen that works until the moment it doesn't. This
+is the specific thing the **acting as** panel now exists to prevent: the scope
+list is on screen, in the first tab, before anything is submitted.
+
+The development configuration Chap's bench uses:
 
 ```
-DOCKTIZO_AUTH_PROVIDER=none
+DOCKTIZO_AUTH_PROVIDER=none          # yes, `none`, while authentication is on
 DOCKTIZO_AUTH_LOCAL_ENABLED=true
 DOCKTIZO_AUTH_LOCAL_TOKEN=<at least 32 characters, no whitespace>
-DOCKTIZO_AUTH_LOCAL_WORKSPACE_IDS=["your-workspace"]
-DOCKTIZO_AUTH_LOCAL_SCOPES=["document_types:read", ...]
+DOCKTIZO_AUTH_LOCAL_WORKSPACE_IDS=["bench"]
+DOCKTIZO_AUTH_LOCAL_SCOPES=[... including "events:read" and "artifacts:download"]
 ```
 
-`auth_provider=none` while authentication is on reads as a bug every time.
+**Enabling authentication is still spelled `auth_provider=none`.**
+`DOCKTIZO_AUTH_PROVIDER` accepts only `none` or `external`; `local` is a startup
+validation error. Local bearer auth is a separate flag. It reads as a bug every
+time.
 
-**The default scope list is one entry.** `DOCKTIZO_AUTH_LOCAL_SCOPES` defaults to
-`["document_types:read"]`, so a service that authenticates correctly still refuses
-sources, generations, documents and artifacts. Exactly one of the module's four
-tabs works until the list is widened.
-
-**The database is not migrated on startup.** `alembic upgrade head` is a separate
-step, and skipping it produces the un-enveloped 500 described in D1.
+**The database is not migrated on startup**, and `alembic upgrade head` against a
+database created by an older revision can fail outright rather than upgrading —
+migration `0018_worker_presence` did on a schema left over from `0015`. A fresh
+file was faster than a repair.
 
 **The request field is `title`; the response field is `display_name`.** `POST
 /v1/sources` is `additionalProperties: false`, so echoing the response's spelling
-back is a 422 — with `details: {"issue_count": 2}` and no indication of which two.
+back is a 422 — one that now tells you which field, which is how this stopped
+being a five-minute problem.
 
-**Validation errors are counted, not described.** Every 422 observed carried
-`details: {"issue_count": N}` and nothing about which fields failed. This is worth
-watching: the module's generate tab shows a JSON editor beside the published
-schema precisely because DocKtizo owns validation, and that trade is only worth
-it while DocKtizo's rejections are more informative than a form's would be. Right
-now they are more *authoritative* but less *specific*. If this does not improve it
-becomes a numbered gap, because the alternative is Chap reimplementing JSON
-Schema validation in the browser to say what the server already knows.
+**`structured_generation_failed` on this host is LewLM crashing, not a weak
+model.** This note previously said the local model was not good enough to produce
+a valid status report. That was wrong, and the way it was wrong is worth keeping.
+
+What is actually true:
+
+- This host has two GGUF models on llama.cpp, and
+  `/v1/models/{id}/capabilities` reports `json_schema` with
+  `enforcement: decode_time`, `decoder_enforced: true`, `fallback_used: false`.
+  Given a small schema, `gemma-4-e4b-hauhau-agg-q8-k-p` returns valid,
+  schema-conforming JSON on the first try.
+- With no `DOCKTIZO_LEWLM_MODEL` pinned, LewLM routes to an MLX model, where
+  structured output is prompt-guided only. It returns prose, DocKtizo rejects it,
+  and the error is `structured_generation_failed` with `retryable: false`.
+- With the GGUF model pinned, DocKtizo spends ~25 seconds in `generating` doing
+  real grammar-constrained work and then fails with `retryable: true` — because
+  **LewLM dies mid-request**. `StatusReportSpec` has seven string fields at
+  `maxLength: 5000`, and LewLM compiles each into one nested GBNF rule per
+  permitted character until llama.cpp's grammar parser refuses and the process
+  exits. One property at `maxLength: 2000` is enough. See
+  `docs/lewlm-gaps.md`, **G30**.
+
+So the blocker is upstream of DocKtizo and upstream of the model, and neither of
+the two things this note originally blamed was responsible. The lesson is the
+one this repo keeps relearning: `retryable: true` was the tell, and it was there
+in the first run.
+
+**No artifact has been rendered end to end on this host yet.** Everything up to
+the model's output is verified: submit, idempotent replay, the 409 on a changed
+body, the worker claiming the row, the state machine advancing through six event
+types, the event stream with resumable cursors, cancellation, and typed terminal
+errors. Only the render and the download link are unexercised, and the reason is
+now a numbered LewLM gap with a one-line reproducer rather than a shrug about
+model quality.
+
+**G30 was fixed in LewLM on 2026-08-11**, which removes that blocker: a schema
+shaped like `StatusReportSpec` — seven fields at `maxLength: 5000` — compiles to
+a grammar llama.cpp accepts, and a bound too large for a grammar parser comes
+back named in `structured_output.grammar_relaxations` and validated after
+generation rather than killing the server. Nothing here has been re-run since, so
+this note describes the last run and not the next one: `npm run proof:dk` with
+the GGUF model pinned is what turns the paragraph above into a rendered artifact
+or into the next real finding.

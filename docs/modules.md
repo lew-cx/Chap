@@ -136,15 +136,22 @@ names no package.
 ```
     646  lewlm              (budget 900)
     478  module-collections (budget 500)
-    788  module-docktizo    (budget 850)
-   1912  everything Chap hand-wrote
+    936  module-docktizo    (budget 950)
+   2060  everything Chap hand-wrote
 ```
 
-The split is the interesting part. `@chap/lewlm` is 646 lines for 56 LewLM
-routes; `module-docktizo` is 788 for 13 of DocKtizo's 21. DocKtizo is not harder —
-it publishes no integration bundle, no event stream and no capability vocabulary
-Chap can join against, and each of those absences is a numbered entry in
-`docs/docktizo-gaps.md` with the lines it costs written next to it.
+The split is the interesting part, and watching it move is the point. When
+`module-docktizo` was written its upstream published no committed spec, no event
+stream and no capability vocabulary, and the module carried a hand-maintained
+copy of DocKtizo's state machine to make up for it. All six gaps closed within a
+day. The state machine is generated now, the poll loop is a stream read with
+`readSSE` from `@chap/lewlm`, and the module is **larger** — because each fix
+made a feature cheap that had not been possible at all.
+
+A budget that only ever goes down would be measuring effort, not contract. This
+one measures both, which is why raising it needs an argument recorded in a gaps
+document, and why `docs/docktizo-gaps.md` ends with the argument for the last
+raise.
 
 That is what a gaps document is for, and it is why a module owns one rather than
 filing against a shared list. Delete the module and its gaps go with it.

@@ -10,22 +10,32 @@
  * `JSON.parse`, and every other failure is shown exactly as DocKtizo sent it.
  *
  * There is no workspace field. The workspace is derived from the token; DocKtizo
- * rejects a request that tries to claim one. The absence is documentation.
+ * rejects a request that tries to claim one. The workspace this tab is acting in
+ * is shown instead, from `/v1/whoami` — the request cannot name it, so the UI
+ * should.
  */
 
 import { useEffect, useState } from 'react';
 
+import { CapabilityNotice } from '@/components/CapabilityNotice.tsx';
 import { Labelled } from '@/components/Field.tsx';
 import { Json } from '@/components/Json.tsx';
 import { Missing, Section } from '@/components/Screen.tsx';
 import { Table } from '@/components/Table.tsx';
 
-import { docktizo, DocktizoError } from '../client.ts';
+import { docktizo, DocktizoError, readiness } from '../client.ts';
 import { useWorkbench } from '../store.ts';
-import type { GenerationAccepted, OutputFormat, TemplateSummary } from '../types.ts';
+import type {
+  DocumentTypeDetail,
+  GenerationAccepted,
+  OutputFormat,
+  TemplateSummary,
+  WorkflowReadiness,
+} from '../types.ts';
 
 export function Generate() {
   const documentType = useWorkbench((state) => state.documentType);
+  const selectDocumentType = useWorkbench((state) => state.select);
   const sources = useWorkbench((state) => state.sources);
   const watch = useWorkbench((state) => state.watch);
 
@@ -40,6 +50,38 @@ export function Generate() {
   const [accepted, setAccepted] = useState<GenerationAccepted | null>(null);
   const [failure, setFailure] = useState<DocktizoError | Error | null>(null);
   const [busy, setBusy] = useState(false);
+  const [runnable, setRunnable] = useState<WorkflowReadiness | null>(null);
+  const [availableTypes, setAvailableTypes] = useState<DocumentTypeDetail[]>([]);
+  const [discoveringTypes, setDiscoveringTypes] = useState(false);
+  const [discoveryFailure, setDiscoveryFailure] = useState<string | null>(null);
+  const workspace = useWorkbench((state) => state.whoami?.workspace_id ?? null);
+
+  // The workbench selection is intentionally session-only, so a page refresh
+  // clears it. Recover here instead of rendering what looks like an empty tab.
+  // A single installed workflow needs no chooser; multiple workflows remain an
+  // explicit user decision.
+  useEffect(() => {
+    if (documentType) return;
+    let active = true;
+    setDiscoveringTypes(true);
+    setDiscoveryFailure(null);
+    docktizo.documentTypes
+      .list()
+      .then((result) => {
+        if (!active) return;
+        setAvailableTypes(result.items);
+        if (result.items.length === 1) selectDocumentType(result.items[0]!);
+      })
+      .catch((cause: unknown) => {
+        if (active) setDiscoveryFailure(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => {
+        if (active) setDiscoveringTypes(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [documentType, selectDocumentType]);
 
   useEffect(() => {
     if (!documentType) return;
@@ -49,8 +91,50 @@ export function Generate() {
       .catch(() => setTemplates([]));
   }, [documentType?.workflow_id]);
 
+  // Whether this host can actually run the workflow, before the button is
+  // pressed. DocKtizo rejects at submit time too, but a request that cannot
+  // succeed is better not sent — the same argument as CapabilityNotice makes
+  // for LewLM, now possible because readiness reports per-workflow capabilities.
+  useEffect(() => {
+    if (!documentType) return;
+    readiness()
+      .then((report) =>
+        setRunnable(
+          (report.workflows ?? []).find((entry) => entry.workflow_id === documentType.workflow_id) ?? null,
+        ),
+      )
+      .catch(() => setRunnable(null));
+  }, [documentType?.workflow_id]);
+
   if (!documentType) {
-    return <Missing>Choose a document type first — the types tab lists what this host installs.</Missing>;
+    return (
+      <Section title="choose a document type" hint="required before generation">
+        <div className="panel">
+          {discoveringTypes ? (
+            <p className="text-sm">Loading installed document types…</p>
+          ) : discoveryFailure ? (
+            <p className="text-sm" style={{ color: 'var(--skin-danger)' }}>
+              {discoveryFailure}
+            </p>
+          ) : availableTypes.length === 0 ? (
+            <p className="text-sm">No document workflows are available to this workspace.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {availableTypes.map((item) => (
+                <button
+                  key={item.workflow_id}
+                  type="button"
+                  className="btn-accent"
+                  onClick={() => selectDocumentType(item)}
+                >
+                  {item.workflow_id}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Section>
+    );
   }
 
   const toggle = <T,>(list: T[], value: T): T[] =>
@@ -84,7 +168,20 @@ export function Generate() {
 
   return (
     <>
-      <Section title="request" hint={documentType.workflow_id}>
+      {runnable && (
+        <CapabilityNotice
+          title={`this host cannot run ${runnable.workflow_id}`}
+          status={{
+            ready: runnable.ready,
+            reason: `LewLM provides no ${(runnable.missing_capabilities ?? []).join(' or ')}.`,
+          }}
+        />
+      )}
+
+      <Section
+        title="request"
+        hint={`${documentType.workflow_id}${workspace ? ` · workspace ${workspace}` : ''}`}
+      >
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <Labelled label="title">
             <input className="field w-64" value={title} onChange={(event) => setTitle(event.target.value)} />
@@ -212,6 +309,19 @@ export function Generate() {
                 : 'request failed'}
             </p>
             <p className="mt-1 text-sm">{failure.message}</p>
+
+            {failure instanceof DocktizoError && failure.issues.length > 0 && (
+              // Which fields, not how many. DocKtizo returns locations and
+              // structural codes and withholds the values, which is the right
+              // trade: the field names are already public in the schema above.
+              <Table
+                columns={[
+                  { key: 'loc', label: 'field', render: (row) => row.location },
+                  { key: 'code', label: 'problem', render: (row) => row.code },
+                ]}
+                rows={failure.issues}
+              />
+            )}
           </div>
         )}
       </Section>
