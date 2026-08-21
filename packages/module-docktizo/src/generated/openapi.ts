@@ -1,11 +1,52 @@
 /**
  * DO NOT EDIT.
  *
- * Generated from a running DocKtizo by `npm run gen:types -- --target docktizo`.
- * DocKtizo commits no spec, so this and vendor/docktizo-openapi.json are the
- * only checked-in record of its contract. See docs/docktizo-gaps.md, D2.
+ * Generated from DocKtizo's published contract by
+ * `npm run gen:types -- --target docktizo`. Edit DocKtizo, not this file.
  */
 export interface paths {
+    "/health/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Health */
+        get: operations["health_health_live_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Readiness
+         * @description Report dependency readiness, in detail only to an authorized caller.
+         *
+         *     The aggregate verdict is anonymous because an operator or a proxy must be
+         *     able to tell a service that is serving from one that is not without holding
+         *     a workspace credential. Component and workflow detail still requires
+         *     ``document_types:read``.
+         */
+        get: operations["readiness_health_ready_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/healthz": {
         parameters: {
             query?: never;
@@ -15,6 +56,57 @@ export interface paths {
         };
         /** Health */
         get: operations["health_healthz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifacts/{artifact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Artifact */
+        get: operations["get_artifact_v1_artifacts__artifact_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/artifacts/{artifact_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Artifact */
+        get: operations["download_artifact_v1_artifacts__artifact_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Audit Records */
+        get: operations["list_audit_records_v1_audit_records_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -51,6 +143,235 @@ export interface paths {
         get: operations["get_document_type_v1_document_types__document_type__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{document_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Document */
+        get: operations["get_document_v1_documents__document_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{document_id}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Document Revisions */
+        get: operations["list_document_revisions_v1_documents__document_id__revisions_get"];
+        put?: never;
+        /** Create Document Revision */
+        post: operations["create_document_revision_v1_documents__document_id__revisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{document_id}/revisions/manual-override": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Manual Override Revision */
+        post: operations["create_manual_override_revision_v1_documents__document_id__revisions_manual_override_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/generations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Generation */
+        post: operations["submit_generation_v1_generations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/generations/{generation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Generation */
+        get: operations["get_generation_v1_generations__generation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/generations/{generation_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Generation */
+        post: operations["cancel_generation_v1_generations__generation_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/generations/{generation_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Generation Events */
+        get: operations["get_generation_events_v1_generations__generation_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/generations/{generation_id}/events/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stream Generation Events
+         * @description Follow the durable event log as it is written, over one ordering.
+         *
+         *     Every ``id:`` is the same opaque cursor the paged read returns, so a
+         *     reconnect with ``Last-Event-ID`` — or a switch back to polling — resumes
+         *     exactly where the stream stopped and never replays or skips an event.
+         */
+        get: operations["stream_generation_events_v1_generations__generation_id__events_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/revisions/{revision_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Revision */
+        get: operations["get_revision_v1_revisions__revision_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/revisions/{revision_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Revision Approvals */
+        get: operations["get_revision_approvals_v1_revisions__revision_id__approvals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/revisions/{revision_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Revision */
+        post: operations["approve_revision_v1_revisions__revision_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/revisions/{revision_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Revision */
+        post: operations["reject_revision_v1_revisions__revision_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/revisions/{revision_id}/request-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Revision Changes */
+        post: operations["request_revision_changes_v1_revisions__revision_id__request_changes_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -126,237 +447,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/generations": {
+    "/v1/whoami": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Submit Generation */
-        post: operations["submit_generation_v1_generations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/generations/{generation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Generation */
-        get: operations["get_generation_v1_generations__generation_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/generations/{generation_id}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Generation Events */
-        get: operations["get_generation_events_v1_generations__generation_id__events_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/generations/{generation_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Cancel Generation */
-        post: operations["cancel_generation_v1_generations__generation_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/documents/{document_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Document */
-        get: operations["get_document_v1_documents__document_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/documents/{document_id}/revisions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Document Revisions */
-        get: operations["list_document_revisions_v1_documents__document_id__revisions_get"];
-        put?: never;
-        /** Create Document Revision */
-        post: operations["create_document_revision_v1_documents__document_id__revisions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/revisions/{revision_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Revision */
-        get: operations["get_revision_v1_revisions__revision_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/documents/{document_id}/revisions/manual-override": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Manual Override Revision */
-        post: operations["create_manual_override_revision_v1_documents__document_id__revisions_manual_override_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/revisions/{revision_id}/approvals": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Revision Approvals */
-        get: operations["get_revision_approvals_v1_revisions__revision_id__approvals_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/revisions/{revision_id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Approve Revision */
-        post: operations["approve_revision_v1_revisions__revision_id__approve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/revisions/{revision_id}/request-changes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Request Revision Changes */
-        post: operations["request_revision_changes_v1_revisions__revision_id__request_changes_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/revisions/{revision_id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reject Revision */
-        post: operations["reject_revision_v1_revisions__revision_id__reject_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/artifacts/{artifact_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Artifact */
-        get: operations["get_artifact_v1_artifacts__artifact_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/artifacts/{artifact_id}/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Artifact */
-        get: operations["download_artifact_v1_artifacts__artifact_id__download_get"];
+        /**
+         * Whoami
+         * @description Report the resolved scope of this credential.
+         *
+         *     Authentication is required but no scope is, because a caller that cannot
+         *     read its own resolved workspace cannot tell a misconfigured deployment from
+         *     a denied one.
+         */
+        get: operations["whoami_v1_whoami_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -380,67 +486,67 @@ export interface components {
         };
         /** ApprovalDecisionResponse */
         ApprovalDecisionResponse: {
-            /** Approval Id */
-            approval_id: string;
-            /** Revision Id */
-            revision_id: string;
-            /** Sequence */
-            sequence: number;
-            decision: components["schemas"]["ApprovalStatus"];
             /** Actor Id */
             actor_id: string;
+            /** Approval Id */
+            approval_id: string;
             /** Comment */
             comment: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            decision: components["schemas"]["ApprovalStatus"];
+            execution_state: components["schemas"]["GenerationState"];
+            /** Idempotency Key */
+            idempotency_key: string;
             /** Policy Result */
             policy_result: {
                 [key: string]: string | number | boolean | null;
             };
             /** Prior Approval Id */
             prior_approval_id: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            execution_state: components["schemas"]["GenerationState"];
-            /** Idempotency Key */
-            idempotency_key: string;
             /** Replayed */
             replayed: boolean;
+            /** Revision Id */
+            revision_id: string;
+            /** Sequence */
+            sequence: number;
         };
         /** ApprovalHistoryResponse */
         ApprovalHistoryResponse: {
+            /** Decisions */
+            decisions: components["schemas"]["ApprovalRecordResponse"][];
             /** Revision Id */
             revision_id: string;
             /** State */
             state: string;
-            /** Decisions */
-            decisions: components["schemas"]["ApprovalRecordResponse"][];
         };
         /** ApprovalRecordResponse */
         ApprovalRecordResponse: {
-            /** Approval Id */
-            approval_id: string;
-            /** Revision Id */
-            revision_id: string;
-            /** Sequence */
-            sequence: number;
-            decision: components["schemas"]["ApprovalStatus"];
             /** Actor Id */
             actor_id: string;
+            /** Approval Id */
+            approval_id: string;
             /** Comment */
             comment: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            decision: components["schemas"]["ApprovalStatus"];
             /** Policy Result */
             policy_result: {
                 [key: string]: string | number | boolean | null;
             };
             /** Prior Approval Id */
             prior_approval_id: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
+            /** Revision Id */
+            revision_id: string;
+            /** Sequence */
+            sequence: number;
         };
         /**
          * ApprovalStatus
@@ -449,29 +555,17 @@ export interface components {
         ApprovalStatus: "approved" | "rejected" | "changes_requested";
         /** ApprovalSummary */
         ApprovalSummary: {
-            state: components["schemas"]["ReviewState"];
-            decision?: components["schemas"]["ApprovalStatus"] | null;
             /** Decided At */
             decided_at?: string | null;
+            decision?: components["schemas"]["ApprovalStatus"] | null;
+            state: components["schemas"]["ReviewState"];
         };
         /** ArtifactMetadata */
         ArtifactMetadata: {
             /** Artifact Id */
             artifact_id: string;
-            /** Generation Id */
-            generation_id: string;
-            /** Revision Id */
-            revision_id: string;
-            output_format: components["schemas"]["OutputFormat"];
-            /** File Name */
-            file_name: string;
-            /** Media Type */
-            media_type: string;
-            /** Size Bytes */
-            size_bytes: number;
             /** Content Hash */
             content_hash: string;
-            versions: components["schemas"]["ArtifactVersionView"];
             /**
              * Created At
              * Format: date-time
@@ -479,6 +573,18 @@ export interface components {
             created_at: string;
             /** Download Url */
             download_url: string;
+            /** File Name */
+            file_name: string;
+            /** Generation Id */
+            generation_id: string;
+            /** Media Type */
+            media_type: string;
+            output_format: components["schemas"]["OutputFormat"];
+            /** Revision Id */
+            revision_id: string;
+            /** Size Bytes */
+            size_bytes: number;
+            versions: components["schemas"]["ArtifactVersionView"];
         };
         /**
          * ArtifactResponse
@@ -487,20 +593,8 @@ export interface components {
         ArtifactResponse: {
             /** Artifact Id */
             artifact_id: string;
-            /** Generation Id */
-            generation_id: string;
-            /** Revision Id */
-            revision_id: string;
-            output_format: components["schemas"]["OutputFormat"];
-            /** File Name */
-            file_name: string;
-            /** Media Type */
-            media_type: string;
-            /** Size Bytes */
-            size_bytes: number;
             /** Content Hash */
             content_hash: string;
-            versions: components["schemas"]["ArtifactVersionView"];
             /**
              * Created At
              * Format: date-time
@@ -508,19 +602,27 @@ export interface components {
             created_at: string;
             /** Download Url */
             download_url: string;
+            /** File Name */
+            file_name: string;
+            /** Generation Id */
+            generation_id: string;
+            /** Media Type */
+            media_type: string;
+            output_format: components["schemas"]["OutputFormat"];
+            /** Revision Id */
+            revision_id: string;
+            /** Size Bytes */
+            size_bytes: number;
+            versions: components["schemas"]["ArtifactVersionView"];
         };
         /** ArtifactVersionView */
         ArtifactVersionView: {
-            /** Workflow Id */
-            workflow_id: string;
-            /** Document Type */
-            document_type: string;
-            /** Workflow Version */
-            workflow_version: number;
-            /** Document Spec Version */
-            document_spec_version: string;
             /** Compiler Version */
             compiler_version: string;
+            /** Document Spec Version */
+            document_spec_version: string;
+            /** Document Type */
+            document_type: string;
             /** Renderer Adapter Version */
             renderer_adapter_version: string;
             /** Template Id */
@@ -529,7 +631,85 @@ export interface components {
             template_version: string | null;
             /** Validation Policy Version */
             validation_policy_version: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workflow Version */
+            workflow_version: number;
         };
+        /**
+         * AuditAction
+         * @enum {string}
+         */
+        AuditAction: "authentication" | "authorization" | "generation_requested" | "generation_completed" | "generation_failed" | "source_created" | "source_attached" | "template_created" | "template_selected" | "revision_requested" | "revision_created" | "manual_override_submitted" | "approval_decided" | "cancellation_requested" | "cancellation_acknowledged" | "artifact_downloaded" | "artifact_deleted" | "recovery_stale_listed" | "recovery_retry_submitted" | "artifact_reconciliation_run" | "retention_executed" | "operator_configuration_changed";
+        /**
+         * AuditOutcome
+         * @enum {string}
+         */
+        AuditOutcome: "succeeded" | "failed" | "denied" | "accepted" | "replayed";
+        /**
+         * AuditRecord
+         * @description Append-only security/business audit evidence with no private content.
+         */
+        AuditRecord: {
+            action: components["schemas"]["AuditAction"];
+            /** Actor Id */
+            actor_id?: string | null;
+            /** Artifact Id */
+            artifact_id?: string | null;
+            /** Audit Id */
+            audit_id: string;
+            /** Correlation Id */
+            correlation_id: string;
+            /** Document Id */
+            document_id?: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Generation Id */
+            generation_id?: string | null;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at?: string;
+            outcome: components["schemas"]["AuditOutcome"];
+            /** Policy Metadata */
+            policy_metadata?: {
+                [key: string]: string | number | boolean | null;
+            };
+            /** Request Id */
+            request_id: string;
+            /** Retain Until */
+            retain_until?: string | null;
+            /** Revision Id */
+            revision_id?: string | null;
+            /**
+             * Schema Version
+             * @default 1.0
+             * @constant
+             */
+            schema_version: "1.0";
+            /** Source Id */
+            source_id?: string | null;
+            /** Subject Id */
+            subject_id?: string | null;
+            /** Subject Type */
+            subject_type: string;
+            /** Template Id */
+            template_id?: string | null;
+            /** Workspace Id */
+            workspace_id?: string | null;
+        };
+        /**
+         * AuthenticationMethod
+         * @enum {string}
+         */
+        AuthenticationMethod: "local_bearer" | "external_bearer";
+        /**
+         * AuthorizationAction
+         * @description Explicit public and operator actions; absence is always a denial.
+         * @enum {string}
+         */
+        AuthorizationAction: "document_types:read" | "sources:read" | "sources:create" | "templates:read" | "templates:create" | "assets:read" | "assets:create" | "generations:read" | "generations:create" | "generations:cancel" | "events:read" | "audit:read" | "documents:read" | "revisions:read" | "artifacts:read" | "artifacts:download" | "revisions:create" | "manual_overrides:create" | "approvals:read" | "approvals:create" | "recovery:read" | "recovery:retry" | "recovery:reconcile" | "retention:execute";
         /**
          * BrandStyleName
          * @enum {string}
@@ -546,40 +726,52 @@ export interface components {
          * @enum {string}
          */
         CancellationOutcome: "requested" | "already_requested" | "cancelled" | "already_cancelled";
+        /** ComponentReadiness */
+        ComponentReadiness: {
+            /** Component */
+            component: string;
+            /** Latency Milliseconds */
+            latency_milliseconds?: number | null;
+            /** Required For Core */
+            required_for_core: boolean;
+            /** Safe Code */
+            safe_code?: string | null;
+            status: components["schemas"]["ReadinessStatus"];
+        };
         /**
          * DocumentResponse
          * @description Provider-neutral immutable document-head projection.
          */
         DocumentResponse: {
-            /** Document Id */
-            document_id: string;
-            /** Workflow Id */
-            workflow_id: string;
-            /** Document Type */
-            document_type: string;
-            /** Workflow Version */
-            workflow_version: number;
-            /** Title */
-            title: string;
-            /** Current Revision Id */
-            current_revision_id: string | null;
-            /** Current Revision Number */
-            current_revision_number: number;
             approval: components["schemas"]["ApprovalSummary"];
             /** Artifact Ids */
             artifact_ids: string[];
-            /** Output Formats */
-            output_formats: components["schemas"]["OutputFormat"][];
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Current Revision Id */
+            current_revision_id: string | null;
+            /** Current Revision Number */
+            current_revision_number: number;
+            /** Document Id */
+            document_id: string;
+            /** Document Type */
+            document_type: string;
+            /** Output Formats */
+            output_formats: components["schemas"]["OutputFormat"][];
+            /** Title */
+            title: string;
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workflow Version */
+            workflow_version: number;
         };
         /** DocumentTypeListResponse */
         DocumentTypeListResponse: {
@@ -590,28 +782,28 @@ export interface components {
         };
         /** DocumentTypeResponse */
         DocumentTypeResponse: {
-            /** Workflow Id */
-            workflow_id: string;
-            /** Document Type */
-            document_type: string;
-            /** Version */
-            version: number;
+            /** Compatible Template Ids */
+            compatible_template_ids?: string[];
             /** Description */
             description: string;
-            /** Supported Output Formats */
-            supported_output_formats: components["schemas"]["OutputFormat"][];
-            /** Retrieval Policy */
-            retrieval_policy: string;
-            /** Requires Review */
-            requires_review: boolean;
-            /** Required Capabilities */
-            required_capabilities: string[];
+            /** Document Type */
+            document_type: string;
             /** Input Schema */
             input_schema?: {
                 [key: string]: unknown;
             } | null;
-            /** Compatible Template Ids */
-            compatible_template_ids?: string[];
+            /** Required Capabilities */
+            required_capabilities: string[];
+            /** Requires Review */
+            requires_review: boolean;
+            /** Retrieval Policy */
+            retrieval_policy: string;
+            /** Supported Output Formats */
+            supported_output_formats: components["schemas"]["OutputFormat"][];
+            /** Version */
+            version: number;
+            /** Workflow Id */
+            workflow_id: string;
         };
         /**
          * EventType
@@ -620,35 +812,35 @@ export interface components {
         EventType: "GENERATION_ACCEPTED" | "GENERATION_PLANNING" | "SOURCE_GATHERING_STARTED" | "SOURCE_GATHERING_COMPLETED" | "RETRIEVAL_STARTED" | "RETRIEVAL_COMPLETED" | "SECTION_GENERATION_STARTED" | "SECTION_GENERATION_COMPLETED" | "VALIDATION_STARTED" | "VALIDATION_FAILED" | "REPAIR_STARTED" | "REPAIR_COMPLETED" | "COMPILATION_STARTED" | "COMPILATION_COMPLETED" | "RENDER_STARTED" | "RENDER_COMPLETED" | "GENERATION_COMPLETED" | "GENERATION_FAILED" | "CANCELLATION_REQUESTED" | "CANCELLATION_ACKNOWLEDGED" | "GENERATION_CANCELLED" | "REVISION_CREATED" | "MANUAL_OVERRIDE_CREATED" | "APPROVAL_REQUESTED" | "REVISION_APPROVED" | "CHANGES_REQUESTED" | "REVISION_REJECTED";
         /** GenerationAcceptedResponse */
         GenerationAcceptedResponse: {
+            /** Client Supplied Idempotency Key */
+            client_supplied_idempotency_key: boolean;
+            /** Correlation Id */
+            correlation_id: string;
             /** Generation Id */
             generation_id: string;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Replayed */
+            replayed: boolean;
+            /** Request Fingerprint */
+            request_fingerprint: string;
             state: components["schemas"]["GenerationState"];
             /** Status Url */
             status_url: string;
-            /** Correlation Id */
-            correlation_id: string;
-            /** Idempotency Key */
-            idempotency_key: string;
-            /** Request Fingerprint */
-            request_fingerprint: string;
-            /** Replayed */
-            replayed: boolean;
-            /** Client Supplied Idempotency Key */
-            client_supplied_idempotency_key: boolean;
         };
         /** GenerationCancellationResponse */
         GenerationCancellationResponse: {
+            /** Acknowledged At */
+            acknowledged_at: string | null;
             /** Generation Id */
             generation_id: string;
-            state: components["schemas"]["GenerationState"];
             outcome: components["schemas"]["CancellationOutcome"];
             /**
              * Requested At
              * Format: date-time
              */
             requested_at: string;
-            /** Acknowledged At */
-            acknowledged_at: string | null;
+            state: components["schemas"]["GenerationState"];
         };
         /**
          * GenerationCreateRequest
@@ -669,20 +861,22 @@ export interface components {
          *     }
          */
         GenerationCreateRequest: {
+            /** Audience */
+            audience?: string | null;
             /** Document Type */
             document_type: string;
-            /** Title */
-            title?: string | null;
-            /** Instructions */
-            instructions?: string | null;
             /** Input Data */
             input_data?: {
                 [key: string]: unknown;
             };
-            /** Source Ids */
-            source_ids?: string[];
-            /** Template Id */
-            template_id?: string | null;
+            /** Instructions */
+            instructions?: string | null;
+            /** Locale */
+            locale?: string | null;
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
             /**
              * Output Formats
              * @default [
@@ -690,68 +884,66 @@ export interface components {
              *     ]
              */
             output_formats: components["schemas"]["OutputFormat"][];
-            /** Locale */
-            locale?: string | null;
-            /** Audience */
-            audience?: string | null;
+            /** Source Ids */
+            source_ids?: string[];
+            /** Template Id */
+            template_id?: string | null;
+            /** Title */
+            title?: string | null;
             /** Tone */
             tone?: string | null;
-            /** Metadata */
-            metadata?: {
-                [key: string]: unknown;
-            };
         };
         /** GenerationEventPageResponse */
         GenerationEventPageResponse: {
-            /** Items */
-            items: components["schemas"]["GenerationEventResponse"][];
             /** Checkpoint */
             checkpoint: string;
-            /** Next Cursor */
-            next_cursor: string | null;
             /** Has More */
             has_more: boolean;
+            /** Items */
+            items: components["schemas"]["GenerationEventResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /** GenerationEventResponse */
         GenerationEventResponse: {
-            /**
-             * Schema Version
-             * @constant
-             */
-            schema_version: "1.0";
-            /** Event Id */
-            event_id: string;
-            /** Sequence */
-            sequence: number;
-            event_type: components["schemas"]["EventType"];
-            /** Workspace Id */
-            workspace_id: string;
-            /** Generation Id */
-            generation_id: string;
-            /** Workflow Id */
-            workflow_id: string;
-            /** Correlation Id */
-            correlation_id: string;
-            /** Document Id */
-            document_id: string | null;
-            /** Revision Id */
-            revision_id: string | null;
-            state: components["schemas"]["GenerationState"];
-            /** Stage */
-            stage: string;
-            /** Progress */
-            progress: number | null;
-            /** Error Code */
-            error_code: string | null;
             /** Attributes */
             attributes: {
                 [key: string]: string | number | boolean | null;
             };
+            /** Correlation Id */
+            correlation_id: string;
+            /** Document Id */
+            document_id: string | null;
+            /** Error Code */
+            error_code: string | null;
+            /** Event Id */
+            event_id: string;
+            event_type: components["schemas"]["EventType"];
+            /** Generation Id */
+            generation_id: string;
             /**
              * Occurred At
              * Format: date-time
              */
             occurred_at: string;
+            /** Progress */
+            progress: number | null;
+            /** Revision Id */
+            revision_id: string | null;
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: "1.0";
+            /** Sequence */
+            sequence: number;
+            /** Stage */
+            stage: string;
+            state: components["schemas"]["GenerationState"];
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workspace Id */
+            workspace_id: string;
         };
         /**
          * GenerationState
@@ -760,38 +952,38 @@ export interface components {
         GenerationState: "accepted" | "planning" | "gathering_sources" | "retrieving" | "generating" | "validating" | "repairing" | "compiling" | "rendering" | "awaiting_review" | "changes_requested" | "rejected" | "completed" | "failed" | "cancelled";
         /** GenerationStatusResponse */
         GenerationStatusResponse: {
-            /** Generation Id */
-            generation_id: string;
-            /** Workflow Id */
-            workflow_id: string;
-            state: components["schemas"]["GenerationState"];
-            /** Stage */
-            stage: string;
+            /** Artifact Ids */
+            artifact_ids: string[];
+            /** Attempt Count */
+            attempt_count: number;
+            /** Cancellation Acknowledged At */
+            cancellation_acknowledged_at: string | null;
+            /** Cancellation Requested At */
+            cancellation_requested_at: string | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Document Id */
+            document_id: string | null;
+            error: components["schemas"]["SafeGenerationError"] | null;
+            /** Generation Id */
+            generation_id: string;
+            /** Requested Formats */
+            requested_formats: components["schemas"]["OutputFormat"][];
+            /** Revision Id */
+            revision_id: string | null;
+            /** Stage */
+            stage: string;
+            state: components["schemas"]["GenerationState"];
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
-            /** Requested Formats */
-            requested_formats: components["schemas"]["OutputFormat"][];
-            /** Document Id */
-            document_id: string | null;
-            /** Revision Id */
-            revision_id: string | null;
-            /** Artifact Ids */
-            artifact_ids: string[];
-            /** Attempt Count */
-            attempt_count: number;
-            error: components["schemas"]["SafeGenerationError"] | null;
-            /** Cancellation Requested At */
-            cancellation_requested_at: string | null;
-            /** Cancellation Acknowledged At */
-            cancellation_acknowledged_at: string | null;
+            /** Workflow Id */
+            workflow_id: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -800,10 +992,10 @@ export interface components {
         };
         /** HealthResponse */
         HealthResponse: {
-            /** Status */
-            status: string;
             /** Service */
             service: string;
+            /** Status */
+            status: string;
             /** Version */
             version: string;
         };
@@ -815,10 +1007,6 @@ export interface components {
         JsonValue: unknown;
         /** ManualOverrideCreateRequest */
         ManualOverrideCreateRequest: {
-            /** Parent Revision Id */
-            parent_revision_id: string;
-            /** Reason */
-            reason: string;
             /** Fields */
             fields: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -827,6 +1015,10 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+            /** Parent Revision Id */
+            parent_revision_id: string;
+            /** Reason */
+            reason: string;
         };
         /**
          * OutputFormat
@@ -834,33 +1026,77 @@ export interface components {
          */
         OutputFormat: "text" | "markdown" | "json" | "csv" | "docx" | "pdf" | "xlsx";
         /**
+         * ReadinessDetail
+         * @enum {string}
+         */
+        ReadinessDetail: "summary" | "full";
+        /** ReadinessReport */
+        ReadinessReport: {
+            /**
+             * Admission Policy
+             * @default accept_deferred
+             */
+            admission_policy: string;
+            /**
+             * Cache Age Milliseconds
+             * @default 0
+             */
+            cache_age_milliseconds: number;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Components */
+            components: components["schemas"]["ComponentReadiness"][];
+            /** Core Ready */
+            core_ready: boolean;
+            /** @default full */
+            detail_level: components["schemas"]["ReadinessDetail"];
+            /** Generation Ready */
+            generation_ready: boolean;
+            /**
+             * Schema Version
+             * @default readiness.v1
+             */
+            schema_version: string;
+            status: components["schemas"]["ReadinessStatus"];
+            /** Workflows */
+            workflows: components["schemas"]["WorkflowReadiness"][];
+        };
+        /**
+         * ReadinessStatus
+         * @enum {string}
+         */
+        ReadinessStatus: "ready" | "degraded" | "unavailable" | "timed_out" | "not_configured" | "deferred";
+        /**
          * ReviewState
          * @enum {string}
          */
         ReviewState: "empty" | "awaiting_review" | "completed" | "approved" | "rejected" | "changes_requested";
         /** RevisionCreateRequest */
         RevisionCreateRequest: {
-            /** Parent Revision Id */
-            parent_revision_id: string;
             /** Instructions */
             instructions: string;
-            /** Target Fields */
-            target_fields: string[];
-            /** Source Ids */
-            source_ids?: string[];
             /** Metadata */
             metadata?: {
                 [key: string]: unknown;
             };
+            /** Parent Revision Id */
+            parent_revision_id: string;
+            /** Source Ids */
+            source_ids?: string[];
+            /** Target Fields */
+            target_fields: string[];
         };
         /** RevisionListResponse */
         RevisionListResponse: {
+            /** Has More */
+            has_more: boolean;
             /** Items */
             items: components["schemas"]["RevisionSummaryResponse"][];
             /** Next Cursor */
             next_cursor: string | null;
-            /** Has More */
-            has_more: boolean;
         };
         /**
          * RevisionMode
@@ -872,82 +1108,82 @@ export interface components {
          * @description Revision detail with public artifact metadata only.
          */
         RevisionResponse: {
-            /** Revision Id */
-            revision_id: string;
-            /** Document Id */
-            document_id: string;
-            /** Generation Id */
-            generation_id: string;
-            execution_state: components["schemas"]["GenerationState"];
-            /** Workflow Id */
-            workflow_id: string;
-            /** Document Type */
-            document_type: string;
-            /** Workflow Version */
-            workflow_version: number;
-            /** Parent Revision Id */
-            parent_revision_id: string | null;
-            /** Revision Number */
-            revision_number: number;
-            /** Requires Review */
-            requires_review: boolean;
-            revision_mode: components["schemas"]["RevisionMode"];
             approval: components["schemas"]["ApprovalSummary"];
             /** Artifact Ids */
             artifact_ids: string[];
-            /** Output Formats */
-            output_formats: components["schemas"]["OutputFormat"][];
+            /** Artifacts */
+            artifacts: components["schemas"]["ArtifactMetadata"][];
+            /** Changed Fields */
+            changed_fields: string[];
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Document Id */
+            document_id: string;
             /** Document Spec Id */
             document_spec_id: string;
-            /** Validation Report Id */
-            validation_report_id: string;
+            /** Document Type */
+            document_type: string;
+            execution_state: components["schemas"]["GenerationState"];
+            /** Generation Id */
+            generation_id: string;
+            /** Output Formats */
+            output_formats: components["schemas"]["OutputFormat"][];
+            /** Parent Revision Id */
+            parent_revision_id: string | null;
+            /** Requires Review */
+            requires_review: boolean;
+            /** Revision Id */
+            revision_id: string;
+            revision_mode: components["schemas"]["RevisionMode"];
+            /** Revision Number */
+            revision_number: number;
             /** Source Reference Ids */
             source_reference_ids: string[];
-            /** Changed Fields */
-            changed_fields: string[];
-            /** Artifacts */
-            artifacts: components["schemas"]["ArtifactMetadata"][];
+            /** Validation Report Id */
+            validation_report_id: string;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workflow Version */
+            workflow_version: number;
         };
         /**
          * RevisionSummaryResponse
          * @description Immutable revision lineage summary.
          */
         RevisionSummaryResponse: {
-            /** Revision Id */
-            revision_id: string;
-            /** Document Id */
-            document_id: string;
-            /** Generation Id */
-            generation_id: string;
-            execution_state: components["schemas"]["GenerationState"];
-            /** Workflow Id */
-            workflow_id: string;
-            /** Document Type */
-            document_type: string;
-            /** Workflow Version */
-            workflow_version: number;
-            /** Parent Revision Id */
-            parent_revision_id: string | null;
-            /** Revision Number */
-            revision_number: number;
-            /** Requires Review */
-            requires_review: boolean;
-            revision_mode: components["schemas"]["RevisionMode"];
             approval: components["schemas"]["ApprovalSummary"];
             /** Artifact Ids */
             artifact_ids: string[];
-            /** Output Formats */
-            output_formats: components["schemas"]["OutputFormat"][];
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Document Id */
+            document_id: string;
+            /** Document Type */
+            document_type: string;
+            execution_state: components["schemas"]["GenerationState"];
+            /** Generation Id */
+            generation_id: string;
+            /** Output Formats */
+            output_formats: components["schemas"]["OutputFormat"][];
+            /** Parent Revision Id */
+            parent_revision_id: string | null;
+            /** Requires Review */
+            requires_review: boolean;
+            /** Revision Id */
+            revision_id: string;
+            revision_mode: components["schemas"]["RevisionMode"];
+            /** Revision Number */
+            revision_number: number;
+            /** Workflow Id */
+            workflow_id: string;
+            /** Workflow Version */
+            workflow_version: number;
         };
         /** SafeGenerationError */
         SafeGenerationError: {
@@ -960,34 +1196,34 @@ export interface components {
         };
         /** SourceResponse */
         SourceResponse: {
-            /** Source Id */
-            source_id: string;
-            source_type: components["schemas"]["SourceType"];
-            /** Display Name */
-            display_name: string;
-            /** File Name */
-            file_name: string | null;
-            /** Media Type */
-            media_type: string | null;
-            /** Size Bytes */
-            size_bytes: number | null;
-            ingestion_state: components["schemas"]["IngestionState"];
-            /** Metadata */
-            metadata: {
-                [key: string]: string | number | boolean | null;
-            };
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /** Display Name */
+            display_name: string;
+            /** File Name */
+            file_name: string | null;
+            ingestion_state: components["schemas"]["IngestionState"];
+            /** Media Type */
+            media_type: string | null;
+            /** Metadata */
+            metadata: {
+                [key: string]: string | number | boolean | null;
+            };
+            /** Replayed */
+            replayed?: boolean | null;
+            /** Size Bytes */
+            size_bytes: number | null;
+            /** Source Id */
+            source_id: string;
+            source_type: components["schemas"]["SourceType"];
             /**
              * Updated At
              * Format: date-time
              */
             updated_at: string;
-            /** Replayed */
-            replayed?: boolean | null;
         };
         /**
          * SourceType
@@ -996,16 +1232,16 @@ export interface components {
         SourceType: "upload" | "lewlm_ingest" | "structured_data" | "user_text" | "revision" | "url_snapshot";
         /** TemplateAssetReference */
         TemplateAssetReference: {
-            /** Asset Id */
-            asset_id: string;
             /** Alt Text */
             alt_text: string;
+            /** Asset Id */
+            asset_id: string;
             /** Caption */
             caption?: string | null;
-            /** Width */
-            width?: number | null;
             /** Height */
             height?: number | null;
+            /** Width */
+            width?: number | null;
         };
         /**
          * TemplateCreateRequest
@@ -1033,36 +1269,36 @@ export interface components {
          *     }
          */
         TemplateCreateRequest: {
-            /** Template Id */
-            template_id?: string | null;
-            /** Workflow Id */
-            workflow_id: string;
-            /** Template Version */
-            template_version: string;
-            /** Name */
-            name: string;
-            /** Compatible Workflow Ids */
-            compatible_workflow_ids?: string[];
-            /** Supported Output Formats */
-            supported_output_formats: components["schemas"]["OutputFormat"][];
-            /** Organization Name */
-            organization_name?: string | null;
-            /** Header Text */
-            header_text?: string | null;
-            /** Footer Text */
-            footer_text?: string | null;
-            /** Legal Text */
-            legal_text?: string | null;
-            /** Locale Default */
-            locale_default?: string | null;
-            /** Style Tokens */
-            style_tokens?: components["schemas"]["BrandStyleToken"][];
             /** Assets */
             assets?: components["schemas"]["TemplateAssetReference"][];
+            /** Compatible Workflow Ids */
+            compatible_workflow_ids?: string[];
             /** Configuration */
             configuration?: {
                 [key: string]: unknown;
             };
+            /** Footer Text */
+            footer_text?: string | null;
+            /** Header Text */
+            header_text?: string | null;
+            /** Legal Text */
+            legal_text?: string | null;
+            /** Locale Default */
+            locale_default?: string | null;
+            /** Name */
+            name: string;
+            /** Organization Name */
+            organization_name?: string | null;
+            /** Style Tokens */
+            style_tokens?: components["schemas"]["BrandStyleToken"][];
+            /** Supported Output Formats */
+            supported_output_formats: components["schemas"]["OutputFormat"][];
+            /** Template Id */
+            template_id?: string | null;
+            /** Template Version */
+            template_version: string;
+            /** Workflow Id */
+            workflow_id: string;
         };
         /** TemplateListResponse */
         TemplateListResponse: {
@@ -1073,32 +1309,10 @@ export interface components {
         };
         /** TemplateResponse */
         TemplateResponse: {
-            /** Template Id */
-            template_id: string;
-            /** Workflow Id */
-            workflow_id: string;
-            /** Template Version */
-            template_version: string;
-            /** Name */
-            name: string;
-            /** Compatible Workflow Ids */
-            compatible_workflow_ids: string[];
-            /** Supported Output Formats */
-            supported_output_formats: components["schemas"]["OutputFormat"][];
-            /** Organization Name */
-            organization_name: string | null;
-            /** Header Text */
-            header_text: string | null;
-            /** Footer Text */
-            footer_text: string | null;
-            /** Legal Text */
-            legal_text: string | null;
-            /** Locale Default */
-            locale_default: string | null;
-            /** Style Tokens */
-            style_tokens: components["schemas"]["BrandStyleToken"][];
             /** Asset Ids */
             asset_ids: string[];
+            /** Compatible Workflow Ids */
+            compatible_workflow_ids: string[];
             /** Configuration */
             configuration: {
                 [key: string]: unknown;
@@ -1108,19 +1322,79 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Footer Text */
+            footer_text: string | null;
+            /** Header Text */
+            header_text: string | null;
+            /** Legal Text */
+            legal_text: string | null;
+            /** Locale Default */
+            locale_default: string | null;
+            /** Name */
+            name: string;
+            /** Organization Name */
+            organization_name: string | null;
+            /** Style Tokens */
+            style_tokens: components["schemas"]["BrandStyleToken"][];
+            /** Supported Output Formats */
+            supported_output_formats: components["schemas"]["OutputFormat"][];
+            /** Template Id */
+            template_id: string;
+            /** Template Version */
+            template_version: string;
+            /** Workflow Id */
+            workflow_id: string;
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
             msg: string;
             /** Error Type */
             type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
+        };
+        /**
+         * WhoAmIResponse
+         * @description The scope a credential resolved to, so a caller never has to guess it.
+         */
+        WhoAmIResponse: {
+            authentication_method: components["schemas"]["AuthenticationMethod"];
+            /** Authorized Workspace Ids */
+            authorized_workspace_ids: string[];
+            /** Correlation Id */
+            correlation_id: string;
+            /** Request Id */
+            request_id: string;
+            /** Roles */
+            roles: string[];
+            /**
+             * Schema Version
+             * @default whoami.v1
+             * @constant
+             */
+            schema_version: "whoami.v1";
+            /** Scopes */
+            scopes: components["schemas"]["AuthorizationAction"][];
+            /** Subject Id */
+            subject_id: string;
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** WorkflowReadiness */
+        WorkflowReadiness: {
+            /** Missing Capabilities */
+            missing_capabilities?: string[];
+            /** Ready */
+            ready: boolean;
+            /** Required Capabilities */
+            required_capabilities?: string[];
+            /** Workflow Id */
+            workflow_id: string;
         };
     };
     responses: never;
@@ -1131,6 +1405,46 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    health_health_live_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    readiness_health_ready_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessReport"];
+                };
+            };
+        };
+    };
     health_healthz_get: {
         parameters: {
             query?: never;
@@ -1147,6 +1461,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    get_artifact_v1_artifacts__artifact_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArtifactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_artifact_v1_artifacts__artifact_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Range?: string | null;
+                "If-None-Match"?: string | null;
+            };
+            path: {
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_audit_records_v1_audit_records_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                action?: components["schemas"]["AuditAction"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditRecord"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1202,6 +1614,484 @@ export interface operations {
             };
         };
     };
+    get_document_v1_documents__document_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_document_revisions_v1_documents__document_id__revisions_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_document_revision_v1_documents__document_id__revisions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevisionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationAcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_override_revision_v1_documents__document_id__revisions_manual_override_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualOverrideCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationAcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_generation_v1_generations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationAcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_generation_v1_generations__generation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                generation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_generation_v1_generations__generation_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                generation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationCancellationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_generation_events_v1_generations__generation_id__events_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                generation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationEventPageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_generation_events_v1_generations__generation_id__events_stream_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+            };
+            header?: {
+                "Last-Event-ID"?: string | null;
+            };
+            path: {
+                generation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server-sent generation events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_revision_v1_revisions__revision_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_revision_approvals_v1_revisions__revision_id__approvals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalHistoryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_revision_v1_revisions__revision_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalDecisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_revision_v1_revisions__revision_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalDecisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_revision_changes_v1_revisions__revision_id__request_changes_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                revision_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalDecisionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_source_v1_sources_post: {
         parameters: {
             query?: never;
@@ -1214,23 +2104,23 @@ export interface operations {
                 "application/json": {
                     /** @constant */
                     kind: "text";
-                    title: string;
-                    text: string;
                     metadata?: Record<string, never>;
+                    text: string;
+                    title: string;
                 } | {
+                    data: Record<string, never> | unknown[];
                     /** @constant */
                     kind: "structured";
-                    title: string;
-                    data: Record<string, never> | unknown[];
                     metadata?: Record<string, never>;
+                    title: string;
                 };
                 "multipart/form-data": {
-                    title: string;
+                    expected_content_hash?: string;
                     /** Format: binary */
                     file: string;
-                    expected_content_hash?: string;
                     /** @description JSON object of safe scalar metadata */
                     metadata?: string;
+                    title: string;
                 };
             };
         };
@@ -1372,50 +2262,13 @@ export interface operations {
             };
         };
     };
-    submit_generation_v1_generations_post: {
+    whoami_v1_whoami_get: {
         parameters: {
             query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerationCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GenerationAcceptedResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_generation_v1_generations__generation_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                generation_id: string;
-            };
-            cookie?: never;
-        };
         requestBody?: never;
         responses: {
             /** @description Successful Response */
@@ -1424,458 +2277,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GenerationStatusResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_generation_events_v1_generations__generation_id__events_get: {
-        parameters: {
-            query?: {
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                generation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GenerationEventPageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_generation_v1_generations__generation_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                generation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GenerationCancellationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_document_v1_documents__document_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DocumentResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_document_revisions_v1_documents__document_id__revisions_get: {
-        parameters: {
-            query?: {
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RevisionListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_document_revision_v1_documents__document_id__revisions_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RevisionCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GenerationAcceptedResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_revision_v1_revisions__revision_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                revision_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RevisionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_manual_override_revision_v1_documents__document_id__revisions_manual_override_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                document_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ManualOverrideCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GenerationAcceptedResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_revision_approvals_v1_revisions__revision_id__approvals_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                revision_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalHistoryResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    approve_revision_v1_revisions__revision_id__approve_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                revision_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApprovalDecisionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalDecisionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    request_revision_changes_v1_revisions__revision_id__request_changes_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                revision_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApprovalDecisionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalDecisionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reject_revision_v1_revisions__revision_id__reject_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                revision_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApprovalDecisionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApprovalDecisionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_artifact_v1_artifacts__artifact_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                artifact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ArtifactResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_artifact_v1_artifacts__artifact_id__download_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                Range?: string | null;
-                "If-None-Match"?: string | null;
-            };
-            path: {
-                artifact_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["WhoAmIResponse"];
                 };
             };
         };

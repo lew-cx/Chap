@@ -1,0 +1,261 @@
+{
+  "authorization_actions": [
+    "document_types:read",
+    "sources:read",
+    "sources:create",
+    "templates:read",
+    "templates:create",
+    "assets:read",
+    "assets:create",
+    "generations:read",
+    "generations:create",
+    "generations:cancel",
+    "events:read",
+    "audit:read",
+    "documents:read",
+    "revisions:read",
+    "artifacts:read",
+    "artifacts:download",
+    "revisions:create",
+    "manual_overrides:create",
+    "approvals:read",
+    "approvals:create",
+    "recovery:read",
+    "recovery:retry",
+    "recovery:reconcile",
+    "retention:execute"
+  ],
+  "error_codes": {
+    "artifact_integrity_failed": 500,
+    "artifact_storage_failed": 500,
+    "artifact_unavailable": 503,
+    "authentication_required": 401,
+    "authentication_unavailable": 503,
+    "authorization_denied": 403,
+    "business_validation_failed": 422,
+    "byte_range_not_supported": 416,
+    "caller_identity_forbidden": 400,
+    "citation_validation_failed": 422,
+    "compilation_failed": 500,
+    "concurrency_conflict": 409,
+    "credential_expired": 401,
+    "event_cursor_expired": 410,
+    "generation_cancelled": 409,
+    "generation_not_cancellable": 409,
+    "idempotency_conflict": 409,
+    "invalid_approval_transition": 409,
+    "invalid_credentials": 401,
+    "invalid_event_cursor": 400,
+    "invalid_generation_request": 422,
+    "invalid_manual_override": 422,
+    "invalid_reconciliation_scope": 422,
+    "invalid_request": 422,
+    "invalid_revision_cursor": 400,
+    "invalid_revision_target": 422,
+    "invalid_source": 422,
+    "invalid_state_transition": 409,
+    "not_found": 404,
+    "persistence_conflict": 409,
+    "provider_capability_missing": 503,
+    "provider_unavailable": 503,
+    "reconciliation_required": 409,
+    "recovery_not_eligible": 409,
+    "rendering_failed": 503,
+    "repair_exhausted": 422,
+    "request_too_large": 413,
+    "retrieval_failed": 503,
+    "source_access_denied": 403,
+    "source_staging_failed": 500,
+    "source_unavailable": 503,
+    "stale_parent": 409,
+    "structured_generation_failed": 503,
+    "structured_output_invalid": 422,
+    "unknown_document_type": 404,
+    "unsupported_media_type": 415,
+    "workspace_access_denied": 403,
+    "workspace_mismatch": 422,
+    "workspace_selection_required": 400
+  },
+  "event_types": [
+    "GENERATION_ACCEPTED",
+    "GENERATION_PLANNING",
+    "SOURCE_GATHERING_STARTED",
+    "SOURCE_GATHERING_COMPLETED",
+    "RETRIEVAL_STARTED",
+    "RETRIEVAL_COMPLETED",
+    "SECTION_GENERATION_STARTED",
+    "SECTION_GENERATION_COMPLETED",
+    "VALIDATION_STARTED",
+    "VALIDATION_FAILED",
+    "REPAIR_STARTED",
+    "REPAIR_COMPLETED",
+    "COMPILATION_STARTED",
+    "COMPILATION_COMPLETED",
+    "RENDER_STARTED",
+    "RENDER_COMPLETED",
+    "GENERATION_COMPLETED",
+    "GENERATION_FAILED",
+    "CANCELLATION_REQUESTED",
+    "CANCELLATION_ACKNOWLEDGED",
+    "GENERATION_CANCELLED",
+    "REVISION_CREATED",
+    "MANUAL_OVERRIDE_CREATED",
+    "APPROVAL_REQUESTED",
+    "REVISION_APPROVED",
+    "CHANGES_REQUESTED",
+    "REVISION_REJECTED"
+  ],
+  "generation_states": {
+    "all": [
+      "accepted",
+      "planning",
+      "gathering_sources",
+      "retrieving",
+      "generating",
+      "validating",
+      "repairing",
+      "compiling",
+      "rendering",
+      "awaiting_review",
+      "changes_requested",
+      "rejected",
+      "completed",
+      "failed",
+      "cancelled"
+    ],
+    "pipeline_order": [
+      "accepted",
+      "planning",
+      "gathering_sources",
+      "retrieving",
+      "generating",
+      "validating",
+      "compiling",
+      "rendering",
+      "awaiting_review"
+    ],
+    "resting": [
+      "awaiting_review",
+      "cancelled",
+      "changes_requested",
+      "completed",
+      "failed",
+      "rejected"
+    ],
+    "terminal": [
+      "cancelled",
+      "changes_requested",
+      "completed",
+      "failed",
+      "rejected"
+    ],
+    "transitions": {
+      "accepted": [
+        "cancelled",
+        "failed",
+        "planning"
+      ],
+      "awaiting_review": [
+        "cancelled",
+        "changes_requested",
+        "completed",
+        "failed",
+        "rejected"
+      ],
+      "cancelled": [],
+      "changes_requested": [],
+      "compiling": [
+        "cancelled",
+        "failed",
+        "rendering"
+      ],
+      "completed": [],
+      "failed": [],
+      "gathering_sources": [
+        "cancelled",
+        "failed",
+        "generating",
+        "retrieving"
+      ],
+      "generating": [
+        "cancelled",
+        "failed",
+        "validating"
+      ],
+      "planning": [
+        "cancelled",
+        "failed",
+        "gathering_sources",
+        "generating",
+        "retrieving"
+      ],
+      "rejected": [],
+      "rendering": [
+        "awaiting_review",
+        "cancelled",
+        "completed",
+        "failed"
+      ],
+      "repairing": [
+        "cancelled",
+        "failed",
+        "validating"
+      ],
+      "retrieving": [
+        "cancelled",
+        "failed",
+        "generating"
+      ],
+      "validating": [
+        "cancelled",
+        "compiling",
+        "failed",
+        "repairing"
+      ]
+    }
+  },
+  "ingestion_states": [
+    "pending",
+    "staged",
+    "ingesting",
+    "ingested",
+    "failed"
+  ],
+  "migration_head": "0018_worker_presence",
+  "output_formats": [
+    "text",
+    "markdown",
+    "json",
+    "csv",
+    "docx",
+    "pdf",
+    "xlsx"
+  ],
+  "readiness_statuses": [
+    "ready",
+    "degraded",
+    "unavailable",
+    "timed_out",
+    "not_configured",
+    "deferred"
+  ],
+  "required_capabilities": [
+    "structured_output",
+    "document_rendering",
+    "document_ingestion",
+    "embeddings",
+    "rerank",
+    "retrieval"
+  ],
+  "schema_version": "docktizo-contract.v1",
+  "service": "docktizo",
+  "source_types": [
+    "upload",
+    "lewlm_ingest",
+    "structured_data",
+    "user_text",
+    "revision",
+    "url_snapshot"
+  ],
+  "version": "0.1.0a0"
+}

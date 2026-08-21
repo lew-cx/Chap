@@ -1,1 +1,4719 @@
-{"openapi": "3.1.0", "info": {"title": "DocKtizo", "description": "Schema-driven AI document orchestration and compilation service.", "version": "0.1.0a0"}, "paths": {"/healthz": {"get": {"tags": ["operations"], "summary": "Health", "operationId": "health_healthz_get", "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}}}}}, "/v1/document-types": {"get": {"tags": ["document types"], "summary": "List Document Types", "operationId": "list_document_types_v1_document_types_get", "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DocumentTypeListResponse"}}}}}, "security": [{"HTTPBearer": []}]}}, "/v1/document-types/{document_type}": {"get": {"tags": ["document types"], "summary": "Get Document Type", "operationId": "get_document_type_v1_document_types__document_type__get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "document_type", "in": "path", "required": true, "schema": {"type": "string", "title": "Document Type"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DocumentTypeResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/sources": {"post": {"tags": ["sources"], "summary": "Create Source", "operationId": "create_source_v1_sources_post", "requestBody": {"content": {"application/json": {"schema": {"oneOf": [{"properties": {"kind": {"const": "text"}, "title": {"type": "string", "maxLength": 255}, "text": {"type": "string"}, "metadata": {"type": "object"}}, "additionalProperties": false, "type": "object", "required": ["kind", "title", "text"]}, {"properties": {"kind": {"const": "structured"}, "title": {"type": "string", "maxLength": 255}, "data": {"type": ["object", "array"]}, "metadata": {"type": "object"}}, "additionalProperties": false, "type": "object", "required": ["kind", "title", "data"]}]}, "examples": {"text": {"summary": "User text source", "value": {"kind": "text", "title": "Weekly notes", "text": "Release candidate validation completed."}}, "structured": {"summary": "Structured data source", "value": {"kind": "structured", "title": "Delivery metrics", "data": {"complete": 7, "total": 9}}}}}, "multipart/form-data": {"schema": {"properties": {"title": {"type": "string", "maxLength": 255}, "file": {"type": "string", "format": "binary"}, "expected_content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "metadata": {"type": "string", "description": "JSON object of safe scalar metadata"}}, "type": "object", "required": ["title", "file"]}}}, "required": true}, "responses": {"201": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SourceResponse"}}}}}, "security": [{"HTTPBearer": []}]}}, "/v1/sources/{source_id}": {"get": {"tags": ["sources"], "summary": "Get Source", "operationId": "get_source_v1_sources__source_id__get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "source_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Source Id"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SourceResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/templates": {"get": {"tags": ["templates"], "summary": "List Templates", "operationId": "list_templates_v1_templates_get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "workflow_id", "in": "query", "required": true, "schema": {"type": "string", "minLength": 4, "maxLength": 80, "title": "Workflow Id"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TemplateListResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}, "post": {"tags": ["templates"], "summary": "Create Template", "operationId": "create_template_v1_templates_post", "security": [{"HTTPBearer": []}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TemplateCreateRequest"}}}}, "responses": {"201": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TemplateResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/templates/{template_id}": {"get": {"tags": ["templates"], "summary": "Get Template", "operationId": "get_template_v1_templates__template_id__get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "template_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Template Id"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/TemplateResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/generations": {"post": {"tags": ["generations"], "summary": "Submit Generation", "operationId": "submit_generation_v1_generations_post", "security": [{"HTTPBearer": []}], "parameters": [{"name": "Idempotency-Key", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string", "minLength": 8, "maxLength": 128}, {"type": "null"}], "title": "Idempotency-Key"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationCreateRequest"}}}}, "responses": {"202": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationAcceptedResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/generations/{generation_id}": {"get": {"tags": ["generations"], "summary": "Get Generation", "operationId": "get_generation_v1_generations__generation_id__get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "generation_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Generation Id"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationStatusResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/generations/{generation_id}/events": {"get": {"tags": ["generations"], "summary": "Get Generation Events", "operationId": "get_generation_events_v1_generations__generation_id__events_get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "generation_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Generation Id"}}, {"name": "cursor", "in": "query", "required": false, "schema": {"anyOf": [{"type": "string", "maxLength": 512}, {"type": "null"}], "title": "Cursor"}}, {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "maximum": 100, "minimum": 1, "default": 50, "title": "Limit"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationEventPageResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/generations/{generation_id}/cancel": {"post": {"tags": ["generations"], "summary": "Cancel Generation", "operationId": "cancel_generation_v1_generations__generation_id__cancel_post", "security": [{"HTTPBearer": []}], "parameters": [{"name": "generation_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Generation Id"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationCancellationResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/documents/{document_id}": {"get": {"tags": ["documents", "revisions", "artifacts"], "summary": "Get Document", "operationId": "get_document_v1_documents__document_id__get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "document_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Document Id"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DocumentResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/documents/{document_id}/revisions": {"get": {"tags": ["documents", "revisions", "artifacts"], "summary": "List Document Revisions", "operationId": "list_document_revisions_v1_documents__document_id__revisions_get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "document_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Document Id"}}, {"name": "cursor", "in": "query", "required": false, "schema": {"anyOf": [{"type": "string", "maxLength": 512}, {"type": "null"}], "title": "Cursor"}}, {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "maximum": 100, "minimum": 1, "default": 50, "title": "Limit"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RevisionListResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}, "post": {"tags": ["documents", "revisions", "artifacts"], "summary": "Create Document Revision", "operationId": "create_document_revision_v1_documents__document_id__revisions_post", "security": [{"HTTPBearer": []}], "parameters": [{"name": "document_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Document Id"}}, {"name": "Idempotency-Key", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string", "minLength": 8, "maxLength": 128}, {"type": "null"}], "title": "Idempotency-Key"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RevisionCreateRequest"}}}}, "responses": {"202": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationAcceptedResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/revisions/{revision_id}": {"get": {"tags": ["documents", "revisions", "artifacts"], "summary": "Get Revision", "operationId": "get_revision_v1_revisions__revision_id__get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Revision Id"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RevisionResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/documents/{document_id}/revisions/manual-override": {"post": {"tags": ["documents", "revisions", "artifacts"], "summary": "Create Manual Override Revision", "operationId": "create_manual_override_revision_v1_documents__document_id__revisions_manual_override_post", "security": [{"HTTPBearer": []}], "parameters": [{"name": "document_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Document Id"}}, {"name": "Idempotency-Key", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string", "minLength": 8, "maxLength": 128}, {"type": "null"}], "title": "Idempotency-Key"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManualOverrideCreateRequest"}}}}, "responses": {"202": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerationAcceptedResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/revisions/{revision_id}/approvals": {"get": {"tags": ["documents", "revisions", "artifacts"], "summary": "Get Revision Approvals", "operationId": "get_revision_approvals_v1_revisions__revision_id__approvals_get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Revision Id"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalHistoryResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/revisions/{revision_id}/approve": {"post": {"tags": ["documents", "revisions", "artifacts"], "summary": "Approve Revision", "operationId": "approve_revision_v1_revisions__revision_id__approve_post", "security": [{"HTTPBearer": []}], "parameters": [{"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Revision Id"}}, {"name": "Idempotency-Key", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string", "minLength": 8, "maxLength": 128}, {"type": "null"}], "title": "Idempotency-Key"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalDecisionRequest"}}}}, "responses": {"201": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalDecisionResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/revisions/{revision_id}/request-changes": {"post": {"tags": ["documents", "revisions", "artifacts"], "summary": "Request Revision Changes", "operationId": "request_revision_changes_v1_revisions__revision_id__request_changes_post", "security": [{"HTTPBearer": []}], "parameters": [{"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Revision Id"}}, {"name": "Idempotency-Key", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string", "minLength": 8, "maxLength": 128}, {"type": "null"}], "title": "Idempotency-Key"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalDecisionRequest"}}}}, "responses": {"201": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalDecisionResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/revisions/{revision_id}/reject": {"post": {"tags": ["documents", "revisions", "artifacts"], "summary": "Reject Revision", "operationId": "reject_revision_v1_revisions__revision_id__reject_post", "security": [{"HTTPBearer": []}], "parameters": [{"name": "revision_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Revision Id"}}, {"name": "Idempotency-Key", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string", "minLength": 8, "maxLength": 128}, {"type": "null"}], "title": "Idempotency-Key"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalDecisionRequest"}}}}, "responses": {"201": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApprovalDecisionResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/artifacts/{artifact_id}": {"get": {"tags": ["documents", "revisions", "artifacts"], "summary": "Get Artifact", "operationId": "get_artifact_v1_artifacts__artifact_id__get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "artifact_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Artifact Id"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ArtifactResponse"}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}, "/v1/artifacts/{artifact_id}/download": {"get": {"tags": ["documents", "revisions", "artifacts"], "summary": "Download Artifact", "operationId": "download_artifact_v1_artifacts__artifact_id__download_get", "security": [{"HTTPBearer": []}], "parameters": [{"name": "artifact_id", "in": "path", "required": true, "schema": {"type": "string", "title": "Artifact Id"}}, {"name": "Range", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string", "maxLength": 256}, {"type": "null"}], "title": "Range"}}, {"name": "If-None-Match", "in": "header", "required": false, "schema": {"anyOf": [{"type": "string", "maxLength": 1024}, {"type": "null"}], "title": "If-None-Match"}}], "responses": {"200": {"description": "Successful Response", "content": {"application/json": {"schema": {}}}}, "422": {"description": "Validation Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}}}}}}, "components": {"schemas": {"ApprovalDecisionRequest": {"properties": {"comment": {"anyOf": [{"type": "string", "maxLength": 5000, "minLength": 1}, {"type": "null"}], "title": "Comment"}, "policy_result": {"additionalProperties": {"anyOf": [{"type": "string", "maxLength": 500}, {"type": "integer"}, {"type": "number"}, {"type": "boolean"}, {"type": "null"}]}, "propertyNames": {"maxLength": 64, "minLength": 1}, "type": "object", "maxProperties": 32, "title": "Policy Result"}}, "additionalProperties": false, "type": "object", "title": "ApprovalDecisionRequest"}, "ApprovalDecisionResponse": {"properties": {"approval_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Approval Id"}, "revision_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Revision Id"}, "sequence": {"type": "integer", "title": "Sequence"}, "decision": {"$ref": "#/components/schemas/ApprovalStatus"}, "actor_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Actor Id"}, "comment": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Comment"}, "policy_result": {"additionalProperties": {"anyOf": [{"type": "string", "maxLength": 500}, {"type": "integer"}, {"type": "number"}, {"type": "boolean"}, {"type": "null"}]}, "type": "object", "title": "Policy Result"}, "prior_approval_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Prior Approval Id"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}, "execution_state": {"$ref": "#/components/schemas/GenerationState"}, "idempotency_key": {"type": "string", "title": "Idempotency Key"}, "replayed": {"type": "boolean", "title": "Replayed"}}, "additionalProperties": false, "type": "object", "required": ["approval_id", "revision_id", "sequence", "decision", "actor_id", "comment", "policy_result", "prior_approval_id", "created_at", "execution_state", "idempotency_key", "replayed"], "title": "ApprovalDecisionResponse"}, "ApprovalHistoryResponse": {"properties": {"revision_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Revision Id"}, "state": {"type": "string", "title": "State"}, "decisions": {"items": {"$ref": "#/components/schemas/ApprovalRecordResponse"}, "type": "array", "title": "Decisions"}}, "additionalProperties": false, "type": "object", "required": ["revision_id", "state", "decisions"], "title": "ApprovalHistoryResponse"}, "ApprovalRecordResponse": {"properties": {"approval_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Approval Id"}, "revision_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Revision Id"}, "sequence": {"type": "integer", "title": "Sequence"}, "decision": {"$ref": "#/components/schemas/ApprovalStatus"}, "actor_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Actor Id"}, "comment": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Comment"}, "policy_result": {"additionalProperties": {"anyOf": [{"type": "string", "maxLength": 500}, {"type": "integer"}, {"type": "number"}, {"type": "boolean"}, {"type": "null"}]}, "type": "object", "title": "Policy Result"}, "prior_approval_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Prior Approval Id"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}}, "additionalProperties": false, "type": "object", "required": ["approval_id", "revision_id", "sequence", "decision", "actor_id", "comment", "policy_result", "prior_approval_id", "created_at"], "title": "ApprovalRecordResponse"}, "ApprovalStatus": {"type": "string", "enum": ["approved", "rejected", "changes_requested"], "title": "ApprovalStatus"}, "ApprovalSummary": {"properties": {"state": {"$ref": "#/components/schemas/ReviewState"}, "decision": {"anyOf": [{"$ref": "#/components/schemas/ApprovalStatus"}, {"type": "null"}]}, "decided_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Decided At"}}, "additionalProperties": false, "type": "object", "required": ["state"], "title": "ApprovalSummary"}, "ArtifactMetadata": {"properties": {"artifact_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Artifact Id"}, "generation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Generation Id"}, "revision_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Revision Id"}, "output_format": {"$ref": "#/components/schemas/OutputFormat"}, "file_name": {"type": "string", "title": "File Name"}, "media_type": {"type": "string", "title": "Media Type"}, "size_bytes": {"type": "integer", "exclusiveMinimum": 0.0, "title": "Size Bytes"}, "content_hash": {"type": "string", "title": "Content Hash"}, "versions": {"$ref": "#/components/schemas/ArtifactVersionView"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}, "download_url": {"type": "string", "title": "Download Url"}}, "additionalProperties": false, "type": "object", "required": ["artifact_id", "generation_id", "revision_id", "output_format", "file_name", "media_type", "size_bytes", "content_hash", "versions", "created_at", "download_url"], "title": "ArtifactMetadata"}, "ArtifactResponse": {"properties": {"artifact_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Artifact Id"}, "generation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Generation Id"}, "revision_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Revision Id"}, "output_format": {"$ref": "#/components/schemas/OutputFormat"}, "file_name": {"type": "string", "title": "File Name"}, "media_type": {"type": "string", "title": "Media Type"}, "size_bytes": {"type": "integer", "exclusiveMinimum": 0.0, "title": "Size Bytes"}, "content_hash": {"type": "string", "title": "Content Hash"}, "versions": {"$ref": "#/components/schemas/ArtifactVersionView"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}, "download_url": {"type": "string", "title": "Download Url"}}, "additionalProperties": false, "type": "object", "required": ["artifact_id", "generation_id", "revision_id", "output_format", "file_name", "media_type", "size_bytes", "content_hash", "versions", "created_at", "download_url"], "title": "ArtifactResponse", "description": "Public artifact metadata; storage identities are intentionally absent."}, "ArtifactVersionView": {"properties": {"workflow_id": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Workflow Id"}, "document_type": {"type": "string", "title": "Document Type"}, "workflow_version": {"type": "integer", "minimum": 1.0, "title": "Workflow Version"}, "document_spec_version": {"type": "string", "title": "Document Spec Version"}, "compiler_version": {"type": "string", "title": "Compiler Version"}, "renderer_adapter_version": {"type": "string", "title": "Renderer Adapter Version"}, "template_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Template Id"}, "template_version": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Template Version"}, "validation_policy_version": {"type": "string", "title": "Validation Policy Version"}}, "additionalProperties": false, "type": "object", "required": ["workflow_id", "document_type", "workflow_version", "document_spec_version", "compiler_version", "renderer_adapter_version", "template_id", "template_version", "validation_policy_version"], "title": "ArtifactVersionView"}, "BrandStyleName": {"type": "string", "enum": ["accent_color", "heading_color", "body_font", "heading_font"], "title": "BrandStyleName"}, "BrandStyleToken": {"properties": {"name": {"$ref": "#/components/schemas/BrandStyleName"}, "value": {"type": "string", "maxLength": 100, "minLength": 1, "title": "Value"}}, "additionalProperties": false, "type": "object", "required": ["name", "value"], "title": "BrandStyleToken"}, "CancellationOutcome": {"type": "string", "enum": ["requested", "already_requested", "cancelled", "already_cancelled"], "title": "CancellationOutcome"}, "DocumentResponse": {"properties": {"document_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Document Id"}, "workflow_id": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Workflow Id"}, "document_type": {"type": "string", "title": "Document Type"}, "workflow_version": {"type": "integer", "minimum": 1.0, "title": "Workflow Version"}, "title": {"type": "string", "title": "Title"}, "current_revision_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Current Revision Id"}, "current_revision_number": {"type": "integer", "minimum": 0.0, "title": "Current Revision Number"}, "approval": {"$ref": "#/components/schemas/ApprovalSummary"}, "artifact_ids": {"items": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, "type": "array", "title": "Artifact Ids"}, "output_formats": {"items": {"$ref": "#/components/schemas/OutputFormat"}, "type": "array", "title": "Output Formats"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}, "updated_at": {"type": "string", "format": "date-time", "title": "Updated At"}}, "additionalProperties": false, "type": "object", "required": ["document_id", "workflow_id", "document_type", "workflow_version", "title", "current_revision_id", "current_revision_number", "approval", "artifact_ids", "output_formats", "created_at", "updated_at"], "title": "DocumentResponse", "description": "Provider-neutral immutable document-head projection."}, "DocumentTypeListResponse": {"properties": {"count": {"type": "integer", "title": "Count"}, "items": {"items": {"$ref": "#/components/schemas/DocumentTypeResponse"}, "type": "array", "title": "Items"}}, "additionalProperties": false, "type": "object", "required": ["count", "items"], "title": "DocumentTypeListResponse"}, "DocumentTypeResponse": {"properties": {"workflow_id": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Workflow Id"}, "document_type": {"type": "string", "title": "Document Type"}, "version": {"type": "integer", "title": "Version"}, "description": {"type": "string", "title": "Description"}, "supported_output_formats": {"items": {"$ref": "#/components/schemas/OutputFormat"}, "type": "array", "title": "Supported Output Formats"}, "retrieval_policy": {"type": "string", "title": "Retrieval Policy"}, "requires_review": {"type": "boolean", "title": "Requires Review"}, "required_capabilities": {"items": {"type": "string"}, "type": "array", "title": "Required Capabilities"}, "input_schema": {"anyOf": [{"additionalProperties": true, "type": "object"}, {"type": "null"}], "title": "Input Schema"}, "compatible_template_ids": {"items": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, "type": "array", "title": "Compatible Template Ids"}}, "additionalProperties": false, "type": "object", "required": ["workflow_id", "document_type", "version", "description", "supported_output_formats", "retrieval_policy", "requires_review", "required_capabilities"], "title": "DocumentTypeResponse"}, "EventType": {"type": "string", "enum": ["GENERATION_ACCEPTED", "GENERATION_PLANNING", "SOURCE_GATHERING_STARTED", "SOURCE_GATHERING_COMPLETED", "RETRIEVAL_STARTED", "RETRIEVAL_COMPLETED", "SECTION_GENERATION_STARTED", "SECTION_GENERATION_COMPLETED", "VALIDATION_STARTED", "VALIDATION_FAILED", "REPAIR_STARTED", "REPAIR_COMPLETED", "COMPILATION_STARTED", "COMPILATION_COMPLETED", "RENDER_STARTED", "RENDER_COMPLETED", "GENERATION_COMPLETED", "GENERATION_FAILED", "CANCELLATION_REQUESTED", "CANCELLATION_ACKNOWLEDGED", "GENERATION_CANCELLED", "REVISION_CREATED", "MANUAL_OVERRIDE_CREATED", "APPROVAL_REQUESTED", "REVISION_APPROVED", "CHANGES_REQUESTED", "REVISION_REJECTED"], "title": "EventType"}, "GenerationAcceptedResponse": {"properties": {"generation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Generation Id"}, "state": {"$ref": "#/components/schemas/GenerationState"}, "status_url": {"type": "string", "title": "Status Url"}, "correlation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Correlation Id"}, "idempotency_key": {"type": "string", "title": "Idempotency Key"}, "request_fingerprint": {"type": "string", "title": "Request Fingerprint"}, "replayed": {"type": "boolean", "title": "Replayed"}, "client_supplied_idempotency_key": {"type": "boolean", "title": "Client Supplied Idempotency Key"}}, "additionalProperties": false, "type": "object", "required": ["generation_id", "state", "status_url", "correlation_id", "idempotency_key", "request_fingerprint", "replayed", "client_supplied_idempotency_key"], "title": "GenerationAcceptedResponse"}, "GenerationCancellationResponse": {"properties": {"generation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Generation Id"}, "state": {"$ref": "#/components/schemas/GenerationState"}, "outcome": {"$ref": "#/components/schemas/CancellationOutcome"}, "requested_at": {"type": "string", "format": "date-time", "title": "Requested At"}, "acknowledged_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Acknowledged At"}}, "additionalProperties": false, "type": "object", "required": ["generation_id", "state", "outcome", "requested_at", "acknowledged_at"], "title": "GenerationCancellationResponse"}, "GenerationCreateRequest": {"properties": {"document_type": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Document Type"}, "title": {"anyOf": [{"type": "string", "maxLength": 500, "minLength": 1}, {"type": "null"}], "title": "Title"}, "instructions": {"anyOf": [{"type": "string", "maxLength": 20000, "minLength": 1}, {"type": "null"}], "title": "Instructions"}, "input_data": {"additionalProperties": true, "type": "object", "title": "Input Data"}, "source_ids": {"items": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, "type": "array", "maxItems": 100, "title": "Source Ids"}, "template_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Template Id"}, "output_formats": {"items": {"$ref": "#/components/schemas/OutputFormat"}, "type": "array", "maxItems": 4, "minItems": 1, "title": "Output Formats", "default": ["docx"]}, "locale": {"anyOf": [{"type": "string", "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"}, {"type": "null"}], "title": "Locale"}, "audience": {"anyOf": [{"type": "string", "maxLength": 500, "minLength": 1}, {"type": "null"}], "title": "Audience"}, "tone": {"anyOf": [{"type": "string", "maxLength": 500, "minLength": 1}, {"type": "null"}], "title": "Tone"}, "metadata": {"additionalProperties": true, "type": "object", "title": "Metadata"}}, "additionalProperties": false, "type": "object", "required": ["document_type"], "title": "GenerationCreateRequest", "examples": [{"document_type": "status_report.v1", "input_data": {"facts": ["Release candidate validation completed."], "project_name": "Apollo", "reporting_date": "2026-07-29", "reporting_period": "Week 30"}, "output_formats": ["docx", "pdf"]}]}, "GenerationEventPageResponse": {"properties": {"items": {"items": {"$ref": "#/components/schemas/GenerationEventResponse"}, "type": "array", "title": "Items"}, "checkpoint": {"type": "string", "title": "Checkpoint"}, "next_cursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Next Cursor"}, "has_more": {"type": "boolean", "title": "Has More"}}, "additionalProperties": false, "type": "object", "required": ["items", "checkpoint", "next_cursor", "has_more"], "title": "GenerationEventPageResponse"}, "GenerationEventResponse": {"properties": {"schema_version": {"type": "string", "const": "1.0", "title": "Schema Version"}, "event_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Event Id"}, "sequence": {"type": "integer", "title": "Sequence"}, "event_type": {"$ref": "#/components/schemas/EventType"}, "workspace_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Workspace Id"}, "generation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Generation Id"}, "workflow_id": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Workflow Id"}, "correlation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Correlation Id"}, "document_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Document Id"}, "revision_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Revision Id"}, "state": {"$ref": "#/components/schemas/GenerationState"}, "stage": {"type": "string", "title": "Stage"}, "progress": {"anyOf": [{"type": "number"}, {"type": "null"}], "title": "Progress"}, "error_code": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Error Code"}, "attributes": {"additionalProperties": {"anyOf": [{"type": "string", "maxLength": 500}, {"type": "integer"}, {"type": "number"}, {"type": "boolean"}, {"type": "null"}]}, "type": "object", "title": "Attributes"}, "occurred_at": {"type": "string", "format": "date-time", "title": "Occurred At"}}, "additionalProperties": false, "type": "object", "required": ["schema_version", "event_id", "sequence", "event_type", "workspace_id", "generation_id", "workflow_id", "correlation_id", "document_id", "revision_id", "state", "stage", "progress", "error_code", "attributes", "occurred_at"], "title": "GenerationEventResponse"}, "GenerationState": {"type": "string", "enum": ["accepted", "planning", "gathering_sources", "retrieving", "generating", "validating", "repairing", "compiling", "rendering", "awaiting_review", "changes_requested", "rejected", "completed", "failed", "cancelled"], "title": "GenerationState"}, "GenerationStatusResponse": {"properties": {"generation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Generation Id"}, "workflow_id": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Workflow Id"}, "state": {"$ref": "#/components/schemas/GenerationState"}, "stage": {"type": "string", "title": "Stage"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}, "updated_at": {"type": "string", "format": "date-time", "title": "Updated At"}, "requested_formats": {"items": {"$ref": "#/components/schemas/OutputFormat"}, "type": "array", "title": "Requested Formats"}, "document_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Document Id"}, "revision_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Revision Id"}, "artifact_ids": {"items": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, "type": "array", "title": "Artifact Ids"}, "attempt_count": {"type": "integer", "title": "Attempt Count"}, "error": {"anyOf": [{"$ref": "#/components/schemas/SafeGenerationError"}, {"type": "null"}]}, "cancellation_requested_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Cancellation Requested At"}, "cancellation_acknowledged_at": {"anyOf": [{"type": "string", "format": "date-time"}, {"type": "null"}], "title": "Cancellation Acknowledged At"}}, "additionalProperties": false, "type": "object", "required": ["generation_id", "workflow_id", "state", "stage", "created_at", "updated_at", "requested_formats", "document_id", "revision_id", "artifact_ids", "attempt_count", "error", "cancellation_requested_at", "cancellation_acknowledged_at"], "title": "GenerationStatusResponse"}, "HTTPValidationError": {"properties": {"detail": {"items": {"$ref": "#/components/schemas/ValidationError"}, "type": "array", "title": "Detail"}}, "type": "object", "title": "HTTPValidationError"}, "HealthResponse": {"properties": {"status": {"type": "string", "title": "Status"}, "service": {"type": "string", "title": "Service"}, "version": {"type": "string", "title": "Version"}}, "type": "object", "required": ["status", "service", "version"], "title": "HealthResponse"}, "IngestionState": {"type": "string", "enum": ["pending", "staged", "ingesting", "ingested", "failed"], "title": "IngestionState"}, "JsonValue": {}, "ManualOverrideCreateRequest": {"properties": {"parent_revision_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Parent Revision Id"}, "reason": {"type": "string", "maxLength": 5000, "minLength": 1, "title": "Reason"}, "fields": {"additionalProperties": {"$ref": "#/components/schemas/JsonValue"}, "propertyNames": {"maxLength": 200, "minLength": 1}, "type": "object", "maxProperties": 100, "minProperties": 1, "title": "Fields"}, "metadata": {"additionalProperties": true, "type": "object", "title": "Metadata"}}, "additionalProperties": false, "type": "object", "required": ["parent_revision_id", "reason", "fields"], "title": "ManualOverrideCreateRequest"}, "OutputFormat": {"type": "string", "enum": ["text", "markdown", "json", "csv", "docx", "pdf", "xlsx"], "title": "OutputFormat"}, "ReviewState": {"type": "string", "enum": ["empty", "awaiting_review", "completed", "approved", "rejected", "changes_requested"], "title": "ReviewState"}, "RevisionCreateRequest": {"properties": {"parent_revision_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Parent Revision Id"}, "instructions": {"type": "string", "maxLength": 20000, "minLength": 1, "title": "Instructions"}, "target_fields": {"items": {"type": "string", "maxLength": 200, "minLength": 1}, "type": "array", "maxItems": 100, "minItems": 1, "title": "Target Fields"}, "source_ids": {"items": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, "type": "array", "maxItems": 100, "title": "Source Ids"}, "metadata": {"additionalProperties": true, "type": "object", "title": "Metadata"}}, "additionalProperties": false, "type": "object", "required": ["parent_revision_id", "instructions", "target_fields"], "title": "RevisionCreateRequest"}, "RevisionListResponse": {"properties": {"items": {"items": {"$ref": "#/components/schemas/RevisionSummaryResponse"}, "type": "array", "title": "Items"}, "next_cursor": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Next Cursor"}, "has_more": {"type": "boolean", "title": "Has More"}}, "additionalProperties": false, "type": "object", "required": ["items", "next_cursor", "has_more"], "title": "RevisionListResponse"}, "RevisionMode": {"type": "string", "enum": ["generated", "manual_override"], "title": "RevisionMode"}, "RevisionResponse": {"properties": {"revision_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Revision Id"}, "document_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Document Id"}, "generation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Generation Id"}, "execution_state": {"$ref": "#/components/schemas/GenerationState"}, "workflow_id": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Workflow Id"}, "document_type": {"type": "string", "title": "Document Type"}, "workflow_version": {"type": "integer", "minimum": 1.0, "title": "Workflow Version"}, "parent_revision_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Parent Revision Id"}, "revision_number": {"type": "integer", "minimum": 1.0, "title": "Revision Number"}, "requires_review": {"type": "boolean", "title": "Requires Review"}, "revision_mode": {"$ref": "#/components/schemas/RevisionMode"}, "approval": {"$ref": "#/components/schemas/ApprovalSummary"}, "artifact_ids": {"items": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, "type": "array", "title": "Artifact Ids"}, "output_formats": {"items": {"$ref": "#/components/schemas/OutputFormat"}, "type": "array", "title": "Output Formats"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}, "document_spec_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Document Spec Id"}, "validation_report_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Validation Report Id"}, "source_reference_ids": {"items": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, "type": "array", "title": "Source Reference Ids"}, "changed_fields": {"items": {"type": "string"}, "type": "array", "title": "Changed Fields"}, "artifacts": {"items": {"$ref": "#/components/schemas/ArtifactMetadata"}, "type": "array", "title": "Artifacts"}}, "additionalProperties": false, "type": "object", "required": ["revision_id", "document_id", "generation_id", "execution_state", "workflow_id", "document_type", "workflow_version", "parent_revision_id", "revision_number", "requires_review", "revision_mode", "approval", "artifact_ids", "output_formats", "created_at", "document_spec_id", "validation_report_id", "source_reference_ids", "changed_fields", "artifacts"], "title": "RevisionResponse", "description": "Revision detail with public artifact metadata only."}, "RevisionSummaryResponse": {"properties": {"revision_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Revision Id"}, "document_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Document Id"}, "generation_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Generation Id"}, "execution_state": {"$ref": "#/components/schemas/GenerationState"}, "workflow_id": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Workflow Id"}, "document_type": {"type": "string", "title": "Document Type"}, "workflow_version": {"type": "integer", "minimum": 1.0, "title": "Workflow Version"}, "parent_revision_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Parent Revision Id"}, "revision_number": {"type": "integer", "minimum": 1.0, "title": "Revision Number"}, "requires_review": {"type": "boolean", "title": "Requires Review"}, "revision_mode": {"$ref": "#/components/schemas/RevisionMode"}, "approval": {"$ref": "#/components/schemas/ApprovalSummary"}, "artifact_ids": {"items": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, "type": "array", "title": "Artifact Ids"}, "output_formats": {"items": {"$ref": "#/components/schemas/OutputFormat"}, "type": "array", "title": "Output Formats"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}}, "additionalProperties": false, "type": "object", "required": ["revision_id", "document_id", "generation_id", "execution_state", "workflow_id", "document_type", "workflow_version", "parent_revision_id", "revision_number", "requires_review", "revision_mode", "approval", "artifact_ids", "output_formats", "created_at"], "title": "RevisionSummaryResponse", "description": "Immutable revision lineage summary."}, "SafeGenerationError": {"properties": {"code": {"type": "string", "title": "Code"}, "message": {"type": "string", "title": "Message"}, "retryable": {"type": "boolean", "title": "Retryable"}}, "additionalProperties": false, "type": "object", "required": ["code", "message", "retryable"], "title": "SafeGenerationError"}, "SourceResponse": {"properties": {"source_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Source Id"}, "source_type": {"$ref": "#/components/schemas/SourceType"}, "display_name": {"type": "string", "title": "Display Name"}, "file_name": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "File Name"}, "media_type": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Media Type"}, "size_bytes": {"anyOf": [{"type": "integer"}, {"type": "null"}], "title": "Size Bytes"}, "ingestion_state": {"$ref": "#/components/schemas/IngestionState"}, "metadata": {"additionalProperties": {"anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "number"}, {"type": "boolean"}, {"type": "null"}]}, "type": "object", "title": "Metadata"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}, "updated_at": {"type": "string", "format": "date-time", "title": "Updated At"}, "replayed": {"anyOf": [{"type": "boolean"}, {"type": "null"}], "title": "Replayed"}}, "additionalProperties": false, "type": "object", "required": ["source_id", "source_type", "display_name", "file_name", "media_type", "size_bytes", "ingestion_state", "metadata", "created_at", "updated_at"], "title": "SourceResponse"}, "SourceType": {"type": "string", "enum": ["upload", "lewlm_ingest", "structured_data", "user_text", "revision", "url_snapshot"], "title": "SourceType"}, "TemplateAssetReference": {"properties": {"asset_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Asset Id"}, "alt_text": {"type": "string", "maxLength": 500, "minLength": 1, "title": "Alt Text"}, "caption": {"anyOf": [{"type": "string", "maxLength": 500, "minLength": 1}, {"type": "null"}], "title": "Caption"}, "width": {"anyOf": [{"type": "integer", "maximum": 10000.0, "minimum": 1.0}, {"type": "null"}], "title": "Width"}, "height": {"anyOf": [{"type": "integer", "maximum": 10000.0, "minimum": 1.0}, {"type": "null"}], "title": "Height"}}, "additionalProperties": false, "type": "object", "required": ["asset_id", "alt_text"], "title": "TemplateAssetReference"}, "TemplateCreateRequest": {"properties": {"template_id": {"anyOf": [{"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, {"type": "null"}], "title": "Template Id"}, "workflow_id": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Workflow Id"}, "template_version": {"type": "string", "maxLength": 50, "minLength": 1, "title": "Template Version"}, "name": {"type": "string", "maxLength": 255, "minLength": 1, "title": "Name"}, "compatible_workflow_ids": {"items": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$"}, "type": "array", "maxItems": 20, "title": "Compatible Workflow Ids"}, "supported_output_formats": {"items": {"$ref": "#/components/schemas/OutputFormat"}, "type": "array", "maxItems": 7, "minItems": 1, "title": "Supported Output Formats"}, "organization_name": {"anyOf": [{"type": "string", "maxLength": 500, "minLength": 1}, {"type": "null"}], "title": "Organization Name"}, "header_text": {"anyOf": [{"type": "string", "maxLength": 500, "minLength": 1}, {"type": "null"}], "title": "Header Text"}, "footer_text": {"anyOf": [{"type": "string", "maxLength": 500, "minLength": 1}, {"type": "null"}], "title": "Footer Text"}, "legal_text": {"anyOf": [{"type": "string", "maxLength": 2000, "minLength": 1}, {"type": "null"}], "title": "Legal Text"}, "locale_default": {"anyOf": [{"type": "string", "maxLength": 100, "minLength": 2}, {"type": "null"}], "title": "Locale Default"}, "style_tokens": {"items": {"$ref": "#/components/schemas/BrandStyleToken"}, "type": "array", "maxItems": 20, "title": "Style Tokens"}, "assets": {"items": {"$ref": "#/components/schemas/TemplateAssetReference"}, "type": "array", "maxItems": 20, "title": "Assets"}, "configuration": {"additionalProperties": true, "type": "object", "title": "Configuration"}}, "additionalProperties": false, "type": "object", "required": ["workflow_id", "template_version", "name", "supported_output_formats"], "title": "TemplateCreateRequest", "examples": [{"configuration": {"section_order": ["summary", "milestones", "risks"]}, "name": "Operations weekly", "style_tokens": [{"name": "accent_color", "value": "#2563EB"}], "supported_output_formats": ["docx", "pdf"], "template_version": "1.0", "workflow_id": "status_report.v1"}]}, "TemplateListResponse": {"properties": {"count": {"type": "integer", "title": "Count"}, "items": {"items": {"$ref": "#/components/schemas/TemplateResponse"}, "type": "array", "title": "Items"}}, "additionalProperties": false, "type": "object", "required": ["count", "items"], "title": "TemplateListResponse"}, "TemplateResponse": {"properties": {"template_id": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$", "title": "Template Id"}, "workflow_id": {"type": "string", "maxLength": 80, "minLength": 4, "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$", "title": "Workflow Id"}, "template_version": {"type": "string", "title": "Template Version"}, "name": {"type": "string", "title": "Name"}, "compatible_workflow_ids": {"items": {"type": "string"}, "type": "array", "title": "Compatible Workflow Ids"}, "supported_output_formats": {"items": {"$ref": "#/components/schemas/OutputFormat"}, "type": "array", "title": "Supported Output Formats"}, "organization_name": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Organization Name"}, "header_text": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Header Text"}, "footer_text": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Footer Text"}, "legal_text": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Legal Text"}, "locale_default": {"anyOf": [{"type": "string"}, {"type": "null"}], "title": "Locale Default"}, "style_tokens": {"items": {"$ref": "#/components/schemas/BrandStyleToken"}, "type": "array", "title": "Style Tokens"}, "asset_ids": {"items": {"type": "string", "maxLength": 128, "minLength": 1, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"}, "type": "array", "title": "Asset Ids"}, "configuration": {"additionalProperties": true, "type": "object", "title": "Configuration"}, "created_at": {"type": "string", "format": "date-time", "title": "Created At"}}, "additionalProperties": false, "type": "object", "required": ["template_id", "workflow_id", "template_version", "name", "compatible_workflow_ids", "supported_output_formats", "organization_name", "header_text", "footer_text", "legal_text", "locale_default", "style_tokens", "asset_ids", "configuration", "created_at"], "title": "TemplateResponse"}, "ValidationError": {"properties": {"loc": {"items": {"anyOf": [{"type": "string"}, {"type": "integer"}]}, "type": "array", "title": "Location"}, "msg": {"type": "string", "title": "Message"}, "type": {"type": "string", "title": "Error Type"}, "input": {"title": "Input"}, "ctx": {"type": "object", "title": "Context"}}, "type": "object", "required": ["loc", "msg", "type"], "title": "ValidationError"}}, "securitySchemes": {"HTTPBearer": {"type": "http", "description": "Bearer credential validated by the configured authenticator", "scheme": "bearer"}}}}
+{
+  "components": {
+    "schemas": {
+      "ApprovalDecisionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "policy_result": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxProperties": 32,
+            "propertyNames": {
+              "maxLength": 64,
+              "minLength": 1
+            },
+            "title": "Policy Result",
+            "type": "object"
+          }
+        },
+        "title": "ApprovalDecisionRequest",
+        "type": "object"
+      },
+      "ApprovalDecisionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "actor_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Actor Id",
+            "type": "string"
+          },
+          "approval_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/ApprovalStatus"
+          },
+          "execution_state": {
+            "$ref": "#/components/schemas/GenerationState"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "policy_result": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Policy Result",
+            "type": "object"
+          },
+          "prior_approval_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Approval Id"
+          },
+          "replayed": {
+            "title": "Replayed",
+            "type": "boolean"
+          },
+          "revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "approval_id",
+          "revision_id",
+          "sequence",
+          "decision",
+          "actor_id",
+          "comment",
+          "policy_result",
+          "prior_approval_id",
+          "created_at",
+          "execution_state",
+          "idempotency_key",
+          "replayed"
+        ],
+        "title": "ApprovalDecisionResponse",
+        "type": "object"
+      },
+      "ApprovalHistoryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalRecordResponse"
+            },
+            "title": "Decisions",
+            "type": "array"
+          },
+          "revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision_id",
+          "state",
+          "decisions"
+        ],
+        "title": "ApprovalHistoryResponse",
+        "type": "object"
+      },
+      "ApprovalRecordResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "actor_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Actor Id",
+            "type": "string"
+          },
+          "approval_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/ApprovalStatus"
+          },
+          "policy_result": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Policy Result",
+            "type": "object"
+          },
+          "prior_approval_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Approval Id"
+          },
+          "revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "approval_id",
+          "revision_id",
+          "sequence",
+          "decision",
+          "actor_id",
+          "comment",
+          "policy_result",
+          "prior_approval_id",
+          "created_at"
+        ],
+        "title": "ApprovalRecordResponse",
+        "type": "object"
+      },
+      "ApprovalStatus": {
+        "enum": [
+          "approved",
+          "rejected",
+          "changes_requested"
+        ],
+        "title": "ApprovalStatus",
+        "type": "string"
+      },
+      "ApprovalSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApprovalStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/ReviewState"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "ApprovalSummary",
+        "type": "object"
+      },
+      "ArtifactMetadata": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "download_url": {
+            "title": "Download Url",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "generation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "output_format": {
+            "$ref": "#/components/schemas/OutputFormat"
+          },
+          "revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "versions": {
+            "$ref": "#/components/schemas/ArtifactVersionView"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "generation_id",
+          "revision_id",
+          "output_format",
+          "file_name",
+          "media_type",
+          "size_bytes",
+          "content_hash",
+          "versions",
+          "created_at",
+          "download_url"
+        ],
+        "title": "ArtifactMetadata",
+        "type": "object"
+      },
+      "ArtifactResponse": {
+        "additionalProperties": false,
+        "description": "Public artifact metadata; storage identities are intentionally absent.",
+        "properties": {
+          "artifact_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "content_hash": {
+            "title": "Content Hash",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "download_url": {
+            "title": "Download Url",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "generation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "output_format": {
+            "$ref": "#/components/schemas/OutputFormat"
+          },
+          "revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "exclusiveMinimum": 0.0,
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "versions": {
+            "$ref": "#/components/schemas/ArtifactVersionView"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "generation_id",
+          "revision_id",
+          "output_format",
+          "file_name",
+          "media_type",
+          "size_bytes",
+          "content_hash",
+          "versions",
+          "created_at",
+          "download_url"
+        ],
+        "title": "ArtifactResponse",
+        "type": "object"
+      },
+      "ArtifactVersionView": {
+        "additionalProperties": false,
+        "properties": {
+          "compiler_version": {
+            "title": "Compiler Version",
+            "type": "string"
+          },
+          "document_spec_version": {
+            "title": "Document Spec Version",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "renderer_adapter_version": {
+            "title": "Renderer Adapter Version",
+            "type": "string"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "template_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Version"
+          },
+          "validation_policy_version": {
+            "title": "Validation Policy Version",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Workflow Id",
+            "type": "string"
+          },
+          "workflow_version": {
+            "minimum": 1.0,
+            "title": "Workflow Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "workflow_id",
+          "document_type",
+          "workflow_version",
+          "document_spec_version",
+          "compiler_version",
+          "renderer_adapter_version",
+          "template_id",
+          "template_version",
+          "validation_policy_version"
+        ],
+        "title": "ArtifactVersionView",
+        "type": "object"
+      },
+      "AuditAction": {
+        "enum": [
+          "authentication",
+          "authorization",
+          "generation_requested",
+          "generation_completed",
+          "generation_failed",
+          "source_created",
+          "source_attached",
+          "template_created",
+          "template_selected",
+          "revision_requested",
+          "revision_created",
+          "manual_override_submitted",
+          "approval_decided",
+          "cancellation_requested",
+          "cancellation_acknowledged",
+          "artifact_downloaded",
+          "artifact_deleted",
+          "recovery_stale_listed",
+          "recovery_retry_submitted",
+          "artifact_reconciliation_run",
+          "retention_executed",
+          "operator_configuration_changed"
+        ],
+        "title": "AuditAction",
+        "type": "string"
+      },
+      "AuditOutcome": {
+        "enum": [
+          "succeeded",
+          "failed",
+          "denied",
+          "accepted",
+          "replayed"
+        ],
+        "title": "AuditOutcome",
+        "type": "string"
+      },
+      "AuditRecord": {
+        "additionalProperties": false,
+        "description": "Append-only security/business audit evidence with no private content.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/AuditAction"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "artifact_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Id"
+          },
+          "audit_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Audit Id",
+            "type": "string"
+          },
+          "correlation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "generation_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generation Id"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/AuditOutcome"
+          },
+          "policy_metadata": {
+            "maxProperties": 16,
+            "patternProperties": {
+              "^[a-z][a-z0-9_]{0,63}$": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "title": "Policy Metadata",
+            "type": "object"
+          },
+          "request_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "retain_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retain Until"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "default": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "subject_type": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Subject Type",
+            "type": "string"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          }
+        },
+        "required": [
+          "audit_id",
+          "action",
+          "outcome",
+          "subject_type",
+          "request_id",
+          "correlation_id"
+        ],
+        "title": "AuditRecord",
+        "type": "object"
+      },
+      "AuthenticationMethod": {
+        "enum": [
+          "local_bearer",
+          "external_bearer"
+        ],
+        "title": "AuthenticationMethod",
+        "type": "string"
+      },
+      "AuthorizationAction": {
+        "description": "Explicit public and operator actions; absence is always a denial.",
+        "enum": [
+          "document_types:read",
+          "sources:read",
+          "sources:create",
+          "templates:read",
+          "templates:create",
+          "assets:read",
+          "assets:create",
+          "generations:read",
+          "generations:create",
+          "generations:cancel",
+          "events:read",
+          "audit:read",
+          "documents:read",
+          "revisions:read",
+          "artifacts:read",
+          "artifacts:download",
+          "revisions:create",
+          "manual_overrides:create",
+          "approvals:read",
+          "approvals:create",
+          "recovery:read",
+          "recovery:retry",
+          "recovery:reconcile",
+          "retention:execute"
+        ],
+        "title": "AuthorizationAction",
+        "type": "string"
+      },
+      "BrandStyleName": {
+        "enum": [
+          "accent_color",
+          "heading_color",
+          "body_font",
+          "heading_font"
+        ],
+        "title": "BrandStyleName",
+        "type": "string"
+      },
+      "BrandStyleToken": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/BrandStyleName"
+          },
+          "value": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "BrandStyleToken",
+        "type": "object"
+      },
+      "CancellationOutcome": {
+        "enum": [
+          "requested",
+          "already_requested",
+          "cancelled",
+          "already_cancelled"
+        ],
+        "title": "CancellationOutcome",
+        "type": "string"
+      },
+      "ComponentReadiness": {
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Component",
+            "type": "string"
+          },
+          "latency_milliseconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Milliseconds"
+          },
+          "required_for_core": {
+            "title": "Required For Core",
+            "type": "boolean"
+          },
+          "safe_code": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safe Code"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReadinessStatus"
+          }
+        },
+        "required": [
+          "component",
+          "status",
+          "required_for_core"
+        ],
+        "title": "ComponentReadiness",
+        "type": "object"
+      },
+      "DocumentResponse": {
+        "additionalProperties": false,
+        "description": "Provider-neutral immutable document-head projection.",
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalSummary"
+          },
+          "artifact_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "title": "Artifact Ids",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_revision_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Revision Id"
+          },
+          "current_revision_number": {
+            "minimum": 0.0,
+            "title": "Current Revision Number",
+            "type": "integer"
+          },
+          "document_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "output_formats": {
+            "items": {
+              "$ref": "#/components/schemas/OutputFormat"
+            },
+            "title": "Output Formats",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Workflow Id",
+            "type": "string"
+          },
+          "workflow_version": {
+            "minimum": 1.0,
+            "title": "Workflow Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "document_id",
+          "workflow_id",
+          "document_type",
+          "workflow_version",
+          "title",
+          "current_revision_id",
+          "current_revision_number",
+          "approval",
+          "artifact_ids",
+          "output_formats",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DocumentResponse",
+        "type": "object"
+      },
+      "DocumentTypeListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentTypeResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "items"
+        ],
+        "title": "DocumentTypeListResponse",
+        "type": "object"
+      },
+      "DocumentTypeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "compatible_template_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "title": "Compatible Template Ids",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "input_schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Schema"
+          },
+          "required_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Capabilities",
+            "type": "array"
+          },
+          "requires_review": {
+            "title": "Requires Review",
+            "type": "boolean"
+          },
+          "retrieval_policy": {
+            "title": "Retrieval Policy",
+            "type": "string"
+          },
+          "supported_output_formats": {
+            "items": {
+              "$ref": "#/components/schemas/OutputFormat"
+            },
+            "title": "Supported Output Formats",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Workflow Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_id",
+          "document_type",
+          "version",
+          "description",
+          "supported_output_formats",
+          "retrieval_policy",
+          "requires_review",
+          "required_capabilities"
+        ],
+        "title": "DocumentTypeResponse",
+        "type": "object"
+      },
+      "EventType": {
+        "enum": [
+          "GENERATION_ACCEPTED",
+          "GENERATION_PLANNING",
+          "SOURCE_GATHERING_STARTED",
+          "SOURCE_GATHERING_COMPLETED",
+          "RETRIEVAL_STARTED",
+          "RETRIEVAL_COMPLETED",
+          "SECTION_GENERATION_STARTED",
+          "SECTION_GENERATION_COMPLETED",
+          "VALIDATION_STARTED",
+          "VALIDATION_FAILED",
+          "REPAIR_STARTED",
+          "REPAIR_COMPLETED",
+          "COMPILATION_STARTED",
+          "COMPILATION_COMPLETED",
+          "RENDER_STARTED",
+          "RENDER_COMPLETED",
+          "GENERATION_COMPLETED",
+          "GENERATION_FAILED",
+          "CANCELLATION_REQUESTED",
+          "CANCELLATION_ACKNOWLEDGED",
+          "GENERATION_CANCELLED",
+          "REVISION_CREATED",
+          "MANUAL_OVERRIDE_CREATED",
+          "APPROVAL_REQUESTED",
+          "REVISION_APPROVED",
+          "CHANGES_REQUESTED",
+          "REVISION_REJECTED"
+        ],
+        "title": "EventType",
+        "type": "string"
+      },
+      "GenerationAcceptedResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "client_supplied_idempotency_key": {
+            "title": "Client Supplied Idempotency Key",
+            "type": "boolean"
+          },
+          "correlation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "generation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "replayed": {
+            "title": "Replayed",
+            "type": "boolean"
+          },
+          "request_fingerprint": {
+            "title": "Request Fingerprint",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GenerationState"
+          },
+          "status_url": {
+            "title": "Status Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generation_id",
+          "state",
+          "status_url",
+          "correlation_id",
+          "idempotency_key",
+          "request_fingerprint",
+          "replayed",
+          "client_supplied_idempotency_key"
+        ],
+        "title": "GenerationAcceptedResponse",
+        "type": "object"
+      },
+      "GenerationCancellationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "generation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/CancellationOutcome"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GenerationState"
+          }
+        },
+        "required": [
+          "generation_id",
+          "state",
+          "outcome",
+          "requested_at",
+          "acknowledged_at"
+        ],
+        "title": "GenerationCancellationResponse",
+        "type": "object"
+      },
+      "GenerationCreateRequest": {
+        "additionalProperties": false,
+        "examples": [
+          {
+            "document_type": "status_report.v1",
+            "input_data": {
+              "facts": [
+                "Release candidate validation completed."
+              ],
+              "project_name": "Apollo",
+              "reporting_date": "2026-07-29",
+              "reporting_period": "Week 30"
+            },
+            "output_formats": [
+              "docx",
+              "pdf"
+            ]
+          }
+        ],
+        "properties": {
+          "audience": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
+          "document_type": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Document Type",
+            "type": "string"
+          },
+          "input_data": {
+            "additionalProperties": true,
+            "title": "Input Data",
+            "type": "object"
+          },
+          "instructions": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instructions"
+          },
+          "locale": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "output_formats": {
+            "default": [
+              "docx"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/OutputFormat"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Output Formats",
+            "type": "array"
+          },
+          "source_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone"
+          }
+        },
+        "required": [
+          "document_type"
+        ],
+        "title": "GenerationCreateRequest",
+        "type": "object"
+      },
+      "GenerationEventPageResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint": {
+            "title": "Checkpoint",
+            "type": "string"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GenerationEventResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "checkpoint",
+          "next_cursor",
+          "has_more"
+        ],
+        "title": "GenerationEventPageResponse",
+        "type": "object"
+      },
+      "GenerationEventResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "attributes": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Attributes",
+            "type": "object"
+          },
+          "correlation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "event_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "generation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id"
+          },
+          "schema_version": {
+            "const": "1.0",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GenerationState"
+          },
+          "workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Workflow Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "event_id",
+          "sequence",
+          "event_type",
+          "workspace_id",
+          "generation_id",
+          "workflow_id",
+          "correlation_id",
+          "document_id",
+          "revision_id",
+          "state",
+          "stage",
+          "progress",
+          "error_code",
+          "attributes",
+          "occurred_at"
+        ],
+        "title": "GenerationEventResponse",
+        "type": "object"
+      },
+      "GenerationState": {
+        "enum": [
+          "accepted",
+          "planning",
+          "gathering_sources",
+          "retrieving",
+          "generating",
+          "validating",
+          "repairing",
+          "compiling",
+          "rendering",
+          "awaiting_review",
+          "changes_requested",
+          "rejected",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "GenerationState",
+        "type": "string"
+      },
+      "GenerationStatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "title": "Artifact Ids",
+            "type": "array"
+          },
+          "attempt_count": {
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "cancellation_acknowledged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Acknowledged At"
+          },
+          "cancellation_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancellation Requested At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SafeGenerationError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "requested_formats": {
+            "items": {
+              "$ref": "#/components/schemas/OutputFormat"
+            },
+            "title": "Requested Formats",
+            "type": "array"
+          },
+          "revision_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Id"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GenerationState"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Workflow Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "generation_id",
+          "workflow_id",
+          "state",
+          "stage",
+          "created_at",
+          "updated_at",
+          "requested_formats",
+          "document_id",
+          "revision_id",
+          "artifact_ids",
+          "attempt_count",
+          "error",
+          "cancellation_requested_at",
+          "cancellation_acknowledged_at"
+        ],
+        "title": "GenerationStatusResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "version"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "IngestionState": {
+        "enum": [
+          "pending",
+          "staged",
+          "ingesting",
+          "ingested",
+          "failed"
+        ],
+        "title": "IngestionState",
+        "type": "string"
+      },
+      "JsonValue": {},
+      "ManualOverrideCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "maxProperties": 100,
+            "minProperties": 1,
+            "propertyNames": {
+              "maxLength": 200,
+              "minLength": 1
+            },
+            "title": "Fields",
+            "type": "object"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "parent_revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Parent Revision Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parent_revision_id",
+          "reason",
+          "fields"
+        ],
+        "title": "ManualOverrideCreateRequest",
+        "type": "object"
+      },
+      "OutputFormat": {
+        "enum": [
+          "text",
+          "markdown",
+          "json",
+          "csv",
+          "docx",
+          "pdf",
+          "xlsx"
+        ],
+        "title": "OutputFormat",
+        "type": "string"
+      },
+      "ReadinessDetail": {
+        "enum": [
+          "summary",
+          "full"
+        ],
+        "title": "ReadinessDetail",
+        "type": "string"
+      },
+      "ReadinessReport": {
+        "additionalProperties": false,
+        "properties": {
+          "admission_policy": {
+            "default": "accept_deferred",
+            "title": "Admission Policy",
+            "type": "string"
+          },
+          "cache_age_milliseconds": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Cache Age Milliseconds",
+            "type": "number"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentReadiness"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "core_ready": {
+            "title": "Core Ready",
+            "type": "boolean"
+          },
+          "detail_level": {
+            "$ref": "#/components/schemas/ReadinessDetail",
+            "default": "full"
+          },
+          "generation_ready": {
+            "title": "Generation Ready",
+            "type": "boolean"
+          },
+          "schema_version": {
+            "default": "readiness.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReadinessStatus"
+          },
+          "workflows": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowReadiness"
+            },
+            "title": "Workflows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "core_ready",
+          "generation_ready",
+          "components",
+          "workflows",
+          "checked_at"
+        ],
+        "title": "ReadinessReport",
+        "type": "object"
+      },
+      "ReadinessStatus": {
+        "enum": [
+          "ready",
+          "degraded",
+          "unavailable",
+          "timed_out",
+          "not_configured",
+          "deferred"
+        ],
+        "title": "ReadinessStatus",
+        "type": "string"
+      },
+      "ReviewState": {
+        "enum": [
+          "empty",
+          "awaiting_review",
+          "completed",
+          "approved",
+          "rejected",
+          "changes_requested"
+        ],
+        "title": "ReviewState",
+        "type": "string"
+      },
+      "RevisionCreateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "instructions": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Instructions",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "parent_revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Parent Revision Id",
+            "type": "string"
+          },
+          "source_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Source Ids",
+            "type": "array"
+          },
+          "target_fields": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Target Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parent_revision_id",
+          "instructions",
+          "target_fields"
+        ],
+        "title": "RevisionCreateRequest",
+        "type": "object"
+      },
+      "RevisionListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionSummaryResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "has_more"
+        ],
+        "title": "RevisionListResponse",
+        "type": "object"
+      },
+      "RevisionMode": {
+        "enum": [
+          "generated",
+          "manual_override"
+        ],
+        "title": "RevisionMode",
+        "type": "string"
+      },
+      "RevisionResponse": {
+        "additionalProperties": false,
+        "description": "Revision detail with public artifact metadata only.",
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalSummary"
+          },
+          "artifact_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "title": "Artifact Ids",
+            "type": "array"
+          },
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactMetadata"
+            },
+            "title": "Artifacts",
+            "type": "array"
+          },
+          "changed_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "document_spec_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Document Spec Id",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "execution_state": {
+            "$ref": "#/components/schemas/GenerationState"
+          },
+          "generation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "output_formats": {
+            "items": {
+              "$ref": "#/components/schemas/OutputFormat"
+            },
+            "title": "Output Formats",
+            "type": "array"
+          },
+          "parent_revision_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Revision Id"
+          },
+          "requires_review": {
+            "title": "Requires Review",
+            "type": "boolean"
+          },
+          "revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "revision_mode": {
+            "$ref": "#/components/schemas/RevisionMode"
+          },
+          "revision_number": {
+            "minimum": 1.0,
+            "title": "Revision Number",
+            "type": "integer"
+          },
+          "source_reference_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "title": "Source Reference Ids",
+            "type": "array"
+          },
+          "validation_report_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Validation Report Id",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Workflow Id",
+            "type": "string"
+          },
+          "workflow_version": {
+            "minimum": 1.0,
+            "title": "Workflow Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision_id",
+          "document_id",
+          "generation_id",
+          "execution_state",
+          "workflow_id",
+          "document_type",
+          "workflow_version",
+          "parent_revision_id",
+          "revision_number",
+          "requires_review",
+          "revision_mode",
+          "approval",
+          "artifact_ids",
+          "output_formats",
+          "created_at",
+          "document_spec_id",
+          "validation_report_id",
+          "source_reference_ids",
+          "changed_fields",
+          "artifacts"
+        ],
+        "title": "RevisionResponse",
+        "type": "object"
+      },
+      "RevisionSummaryResponse": {
+        "additionalProperties": false,
+        "description": "Immutable revision lineage summary.",
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalSummary"
+          },
+          "artifact_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "title": "Artifact Ids",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "execution_state": {
+            "$ref": "#/components/schemas/GenerationState"
+          },
+          "generation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Generation Id",
+            "type": "string"
+          },
+          "output_formats": {
+            "items": {
+              "$ref": "#/components/schemas/OutputFormat"
+            },
+            "title": "Output Formats",
+            "type": "array"
+          },
+          "parent_revision_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Revision Id"
+          },
+          "requires_review": {
+            "title": "Requires Review",
+            "type": "boolean"
+          },
+          "revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Revision Id",
+            "type": "string"
+          },
+          "revision_mode": {
+            "$ref": "#/components/schemas/RevisionMode"
+          },
+          "revision_number": {
+            "minimum": 1.0,
+            "title": "Revision Number",
+            "type": "integer"
+          },
+          "workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Workflow Id",
+            "type": "string"
+          },
+          "workflow_version": {
+            "minimum": 1.0,
+            "title": "Workflow Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision_id",
+          "document_id",
+          "generation_id",
+          "execution_state",
+          "workflow_id",
+          "document_type",
+          "workflow_version",
+          "parent_revision_id",
+          "revision_number",
+          "requires_review",
+          "revision_mode",
+          "approval",
+          "artifact_ids",
+          "output_formats",
+          "created_at"
+        ],
+        "title": "RevisionSummaryResponse",
+        "type": "object"
+      },
+      "SafeGenerationError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "title": "SafeGenerationError",
+        "type": "object"
+      },
+      "SourceResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name"
+          },
+          "ingestion_state": {
+            "$ref": "#/components/schemas/IngestionState"
+          },
+          "media_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Type"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Metadata",
+            "type": "object"
+          },
+          "replayed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replayed"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "source_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id",
+          "source_type",
+          "display_name",
+          "file_name",
+          "media_type",
+          "size_bytes",
+          "ingestion_state",
+          "metadata",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SourceResponse",
+        "type": "object"
+      },
+      "SourceType": {
+        "enum": [
+          "upload",
+          "lewlm_ingest",
+          "structured_data",
+          "user_text",
+          "revision",
+          "url_snapshot"
+        ],
+        "title": "SourceType",
+        "type": "string"
+      },
+      "TemplateAssetReference": {
+        "additionalProperties": false,
+        "properties": {
+          "alt_text": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Alt Text",
+            "type": "string"
+          },
+          "asset_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "asset_id",
+          "alt_text"
+        ],
+        "title": "TemplateAssetReference",
+        "type": "object"
+      },
+      "TemplateCreateRequest": {
+        "additionalProperties": false,
+        "examples": [
+          {
+            "configuration": {
+              "section_order": [
+                "summary",
+                "milestones",
+                "risks"
+              ]
+            },
+            "name": "Operations weekly",
+            "style_tokens": [
+              {
+                "name": "accent_color",
+                "value": "#2563EB"
+              }
+            ],
+            "supported_output_formats": [
+              "docx",
+              "pdf"
+            ],
+            "template_version": "1.0",
+            "workflow_id": "status_report.v1"
+          }
+        ],
+        "properties": {
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateAssetReference"
+            },
+            "maxItems": 20,
+            "title": "Assets",
+            "type": "array"
+          },
+          "compatible_workflow_ids": {
+            "items": {
+              "maxLength": 80,
+              "minLength": 4,
+              "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Compatible Workflow Ids",
+            "type": "array"
+          },
+          "configuration": {
+            "additionalProperties": true,
+            "title": "Configuration",
+            "type": "object"
+          },
+          "footer_text": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Footer Text"
+          },
+          "header_text": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Text"
+          },
+          "legal_text": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Text"
+          },
+          "locale_default": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale Default"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "organization_name": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Name"
+          },
+          "style_tokens": {
+            "items": {
+              "$ref": "#/components/schemas/BrandStyleToken"
+            },
+            "maxItems": 20,
+            "title": "Style Tokens",
+            "type": "array"
+          },
+          "supported_output_formats": {
+            "items": {
+              "$ref": "#/components/schemas/OutputFormat"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Supported Output Formats",
+            "type": "array"
+          },
+          "template_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template Id"
+          },
+          "template_version": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Template Version",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Workflow Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_id",
+          "template_version",
+          "name",
+          "supported_output_formats"
+        ],
+        "title": "TemplateCreateRequest",
+        "type": "object"
+      },
+      "TemplateListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "items"
+        ],
+        "title": "TemplateListResponse",
+        "type": "object"
+      },
+      "TemplateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "title": "Asset Ids",
+            "type": "array"
+          },
+          "compatible_workflow_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Compatible Workflow Ids",
+            "type": "array"
+          },
+          "configuration": {
+            "additionalProperties": true,
+            "title": "Configuration",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "footer_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Footer Text"
+          },
+          "header_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Text"
+          },
+          "legal_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Text"
+          },
+          "locale_default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale Default"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "organization_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Name"
+          },
+          "style_tokens": {
+            "items": {
+              "$ref": "#/components/schemas/BrandStyleToken"
+            },
+            "title": "Style Tokens",
+            "type": "array"
+          },
+          "supported_output_formats": {
+            "items": {
+              "$ref": "#/components/schemas/OutputFormat"
+            },
+            "title": "Supported Output Formats",
+            "type": "array"
+          },
+          "template_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Template Id",
+            "type": "string"
+          },
+          "template_version": {
+            "title": "Template Version",
+            "type": "string"
+          },
+          "workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Workflow Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_id",
+          "workflow_id",
+          "template_version",
+          "name",
+          "compatible_workflow_ids",
+          "supported_output_formats",
+          "organization_name",
+          "header_text",
+          "footer_text",
+          "legal_text",
+          "locale_default",
+          "style_tokens",
+          "asset_ids",
+          "configuration",
+          "created_at"
+        ],
+        "title": "TemplateResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WhoAmIResponse": {
+        "additionalProperties": false,
+        "description": "The scope a credential resolved to, so a caller never has to guess it.",
+        "properties": {
+          "authentication_method": {
+            "$ref": "#/components/schemas/AuthenticationMethod"
+          },
+          "authorized_workspace_ids": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "title": "Authorized Workspace Ids",
+            "type": "array"
+          },
+          "correlation_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": "whoami.v1",
+            "default": "whoami.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/AuthorizationAction"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "subject_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "subject_id",
+          "authentication_method",
+          "roles",
+          "scopes",
+          "authorized_workspace_ids",
+          "request_id",
+          "correlation_id"
+        ],
+        "title": "WhoAmIResponse",
+        "type": "object"
+      },
+      "WorkflowReadiness": {
+        "additionalProperties": false,
+        "properties": {
+          "missing_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Capabilities",
+            "type": "array"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "required_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Capabilities",
+            "type": "array"
+          },
+          "workflow_id": {
+            "title": "Workflow Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_id",
+          "ready"
+        ],
+        "title": "WorkflowReadiness",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "description": "Bearer credential validated by the configured authenticator",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Schema-driven AI document orchestration and compilation service.",
+    "title": "DocKtizo",
+    "version": "0.1.0a0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health/live": {
+      "get": {
+        "operationId": "health_health_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "Report dependency readiness, in detail only to an authorized caller.\n\nThe aggregate verdict is anonymous because an operator or a proxy must be\nable to tell a service that is serving from one that is not without holding\na workspace credential. Component and workflow detail still requires\n``document_types:read``.",
+        "operationId": "readiness_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Readiness",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "health_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/v1/artifacts/{artifact_id}": {
+      "get": {
+        "operationId": "get_artifact_v1_artifacts__artifact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Artifact",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/artifacts/{artifact_id}/download": {
+      "get": {
+        "operationId": "download_artifact_v1_artifacts__artifact_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Range",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Range"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1024,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Artifact",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/audit-records": {
+      "get": {
+        "operationId": "list_audit_records_v1_audit_records_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AuditAction"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AuditRecord"
+                  },
+                  "title": "Response List Audit Records V1 Audit Records Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Audit Records",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
+    "/v1/document-types": {
+      "get": {
+        "operationId": "list_document_types_v1_document_types_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTypeListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Document Types",
+        "tags": [
+          "document types"
+        ]
+      }
+    },
+    "/v1/document-types/{document_type}": {
+      "get": {
+        "operationId": "get_document_type_v1_document_types__document_type__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_type",
+            "required": true,
+            "schema": {
+              "title": "Document Type",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTypeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Document Type",
+        "tags": [
+          "document types"
+        ]
+      }
+    },
+    "/v1/documents/{document_id}": {
+      "get": {
+        "operationId": "get_document_v1_documents__document_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Document",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/documents/{document_id}/revisions": {
+      "get": {
+        "operationId": "list_document_revisions_v1_documents__document_id__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Document Revisions",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      },
+      "post": {
+        "operationId": "create_document_revision_v1_documents__document_id__revisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationAcceptedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Document Revision",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/documents/{document_id}/revisions/manual-override": {
+      "post": {
+        "operationId": "create_manual_override_revision_v1_documents__document_id__revisions_manual_override_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualOverrideCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationAcceptedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Manual Override Revision",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/generations": {
+      "post": {
+        "operationId": "submit_generation_v1_generations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationAcceptedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Generation",
+        "tags": [
+          "generations"
+        ]
+      }
+    },
+    "/v1/generations/{generation_id}": {
+      "get": {
+        "operationId": "get_generation_v1_generations__generation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "generation_id",
+            "required": true,
+            "schema": {
+              "title": "Generation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Generation",
+        "tags": [
+          "generations"
+        ]
+      }
+    },
+    "/v1/generations/{generation_id}/cancel": {
+      "post": {
+        "operationId": "cancel_generation_v1_generations__generation_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "generation_id",
+            "required": true,
+            "schema": {
+              "title": "Generation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationCancellationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Cancel Generation",
+        "tags": [
+          "generations"
+        ]
+      }
+    },
+    "/v1/generations/{generation_id}/events": {
+      "get": {
+        "operationId": "get_generation_events_v1_generations__generation_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "generation_id",
+            "required": true,
+            "schema": {
+              "title": "Generation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationEventPageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Generation Events",
+        "tags": [
+          "generations"
+        ]
+      }
+    },
+    "/v1/generations/{generation_id}/events/stream": {
+      "get": {
+        "description": "Follow the durable event log as it is written, over one ordering.\n\nEvery ``id:`` is the same opaque cursor the paged read returns, so a\nreconnect with ``Last-Event-ID`` — or a switch back to polling — resumes\nexactly where the stream stopped and never replays or skips an event.",
+        "operationId": "stream_generation_events_v1_generations__generation_id__events_stream_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "generation_id",
+            "required": true,
+            "schema": {
+              "title": "Generation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Server-sent generation events"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream Generation Events",
+        "tags": [
+          "generations"
+        ]
+      }
+    },
+    "/v1/revisions/{revision_id}": {
+      "get": {
+        "operationId": "get_revision_v1_revisions__revision_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "title": "Revision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Revision",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/revisions/{revision_id}/approvals": {
+      "get": {
+        "operationId": "get_revision_approvals_v1_revisions__revision_id__approvals_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "title": "Revision Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Revision Approvals",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/revisions/{revision_id}/approve": {
+      "post": {
+        "operationId": "approve_revision_v1_revisions__revision_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "title": "Revision Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDecisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Revision",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/revisions/{revision_id}/reject": {
+      "post": {
+        "operationId": "reject_revision_v1_revisions__revision_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "title": "Revision Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDecisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Revision",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/revisions/{revision_id}/request-changes": {
+      "post": {
+        "operationId": "request_revision_changes_v1_revisions__revision_id__request_changes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "revision_id",
+            "required": true,
+            "schema": {
+              "title": "Revision Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDecisionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Request Revision Changes",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/sources": {
+      "post": {
+        "operationId": "create_source_v1_sources_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "structured": {
+                  "summary": "Structured data source",
+                  "value": {
+                    "data": {
+                      "complete": 7,
+                      "total": 9
+                    },
+                    "kind": "structured",
+                    "title": "Delivery metrics"
+                  }
+                },
+                "text": {
+                  "summary": "User text source",
+                  "value": {
+                    "kind": "text",
+                    "text": "Release candidate validation completed.",
+                    "title": "Weekly notes"
+                  }
+                }
+              },
+              "schema": {
+                "oneOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "text"
+                      },
+                      "metadata": {
+                        "type": "object"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "maxLength": 255,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "title",
+                      "text"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "data": {
+                        "type": [
+                          "object",
+                          "array"
+                        ]
+                      },
+                      "kind": {
+                        "const": "structured"
+                      },
+                      "metadata": {
+                        "type": "object"
+                      },
+                      "title": {
+                        "maxLength": 255,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "title",
+                      "data"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "expected_content_hash": {
+                    "pattern": "^[a-f0-9]{64}$",
+                    "type": "string"
+                  },
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "description": "JSON object of safe scalar metadata",
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 255,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "file"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Source",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/sources/{source_id}": {
+      "get": {
+        "operationId": "get_source_v1_sources__source_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "title": "Source Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Source",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/v1/templates": {
+      "get": {
+        "operationId": "list_templates_v1_templates_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workflow_id",
+            "required": true,
+            "schema": {
+              "maxLength": 80,
+              "minLength": 4,
+              "title": "Workflow Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Templates",
+        "tags": [
+          "templates"
+        ]
+      },
+      "post": {
+        "operationId": "create_template_v1_templates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Template",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/v1/templates/{template_id}": {
+      "get": {
+        "operationId": "get_template_v1_templates__template_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Template",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/v1/whoami": {
+      "get": {
+        "description": "Report the resolved scope of this credential.\n\nAuthentication is required but no scope is, because a caller that cannot\nread its own resolved workspace cannot tell a misconfigured deployment from\na denied one.",
+        "operationId": "whoami_v1_whoami_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhoAmIResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Whoami",
+        "tags": [
+          "identity"
+        ]
+      }
+    }
+  }
+}

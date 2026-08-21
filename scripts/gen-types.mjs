@@ -367,32 +367,34 @@ async function generate() {
 // ---------------------------------------------------------------------------
 
 /**
- * DocKtizo publishes nothing.
+ * DocKtizo publishes two documents, and they are exactly complementary — the
+ * same shape LewLM's OpenAPI-plus-bundle split has:
  *
- * No integration bundle, no committed spec, no client package — the OpenAPI
- * document exists only inside a running FastAPI process. So this target is the
- * LewLM one with everything the bundle bought taken away: no composed request
- * shapes, no event-type catalogue, no error-code catalogue, no fixtures. What
- * is left is routes and component schemas, which is enough to type a client and
- * not enough to type a stream.
+ *   docs/api/openapi.json    26 routes and 54 component schemas
+ *   docs/api/contract.json   what OpenAPI cannot express — the state machine's
+ *                            transition table, `pipeline_order`, the terminal
+ *                            and resting sets, and the error, event, action and
+ *                            capability vocabularies
  *
- * That absence is the entire content of docs/docktizo-gaps.md D2, and the reason
- * the module's hand-written line count is what it is.
+ * Both are committed to the DocKtizo repo and generated from the live
+ * application, so the drift gate has teeth on both sides. Chap used to
+ * hand-maintain the pipeline order and the terminal set in `types.ts` because
+ * neither was published; that code is gone.
  *
  * `create_app()` builds a database engine but never connects and binds no port,
- * so the venv path works offline exactly as LewLM's does.
+ * so the venv fallback works offline exactly as LewLM's does.
  */
 const DOCKTIZO_HOME = process.env.DOCKTIZO_HOME ?? resolve(ROOT, '../DocKtizo');
 const DOCKTIZO_OUT = join(ROOT, 'packages/module-docktizo/src/generated');
 const DOCKTIZO_VENDOR = join(VENDOR, 'docktizo-openapi.json');
+const DOCKTIZO_VENDOR_CONTRACT = join(VENDOR, 'docktizo-contract.json');
 
 const DOCKTIZO_BANNER = [
   '/**',
   ' * DO NOT EDIT.',
   ' *',
-  ' * Generated from a running DocKtizo by `npm run gen:types -- --target docktizo`.',
-  ' * DocKtizo commits no spec, so this and vendor/docktizo-openapi.json are the',
-  ' * only checked-in record of its contract. See docs/docktizo-gaps.md, D2.',
+  ' * Generated from DocKtizo\'s published contract by',
+  ' * `npm run gen:types -- --target docktizo`. Edit DocKtizo, not this file.',
   ' */',
   '',
 ].join('\n');
@@ -408,43 +410,108 @@ async function docktizoFromVenv() {
   return stdout;
 }
 
-async function generateDocktizo() {
-  const attempts =
-    OPENAPI_SOURCE === 'file'
-      ? [['file', () => readFile(DOCKTIZO_VENDOR, 'utf8')]]
-      : OPENAPI_SOURCE === 'url'
-        ? [['url', async () => {
-            const res = await fetch(`${BASE_URL}/openapi.json`);
-            if (!res.ok) throw new Error(`GET ${BASE_URL}/openapi.json -> ${res.status}`);
-            return res.text();
-          }], ['file', () => readFile(DOCKTIZO_VENDOR, 'utf8')]]
-        : [['venv', docktizoFromVenv], ['file', () => readFile(DOCKTIZO_VENDOR, 'utf8')]];
+/**
+ * One resolution chain per document. The committed copy comes first now that
+ * one exists — it is the artifact DocKtizo's own `make contract-check` gates.
+ */
+function docktizoSources(published, vendored, live) {
+  const repo = () => readFile(join(DOCKTIZO_HOME, published), 'utf8');
+  const vendor = () => readFile(vendored, 'utf8');
+  if (OPENAPI_SOURCE === 'file') return [['vendor', vendor]];
+  if (OPENAPI_SOURCE === 'url') return [['url', live], ['vendor', vendor]];
+  return [['repo', repo], ['venv', live], ['vendor', vendor]];
+}
 
+async function resolveFirst(label, attempts) {
   const failures = [];
-  let openapiRaw = null;
   for (const [name, load] of attempts) {
     try {
-      openapiRaw = await load();
-      console.log(`  openapi   <- ${name}`);
-      break;
+      const raw = await load();
+      console.log(`  ${label.padEnd(9)} <- ${name}`);
+      return raw;
     } catch (error) {
       failures.push(`${name}: ${error.message}`);
     }
   }
-  if (openapiRaw == null) {
-    throw new Error(`could not resolve DocKtizo's OpenAPI.\n    ${failures.join('\n    ')}`);
-  }
+  throw new Error(`could not resolve DocKtizo's ${label}.\n    ${failures.join('\n    ')}`);
+}
+
+/**
+ * Turn contract.json into `as const` tuples and maps.
+ *
+ * Emitted rather than imported as JSON so the values are literal types: a
+ * `GenerationState` narrowed from `TERMINAL` is the contract's own set, and a
+ * stale copy cannot typecheck against a fresh `openapi.ts`.
+ */
+function buildDocktizoContract(contract) {
+  const states = contract.generation_states ?? {};
+  const tuple = (name, values) =>
+    `export const ${name} = ${JSON.stringify(values ?? [])} as const;`;
+
+  return [
+    DOCKTIZO_BANNER,
+    '/** The pipeline, in the order DocKtizo advances through it. */',
+    tuple('PIPELINE_ORDER', states.pipeline_order),
+    '',
+    '/** Nothing more will happen. Polling and streaming stop here. */',
+    tuple('TERMINAL', states.terminal),
+    '',
+    '/** Not advancing, but not necessarily finished — `awaiting_review` is both. */',
+    tuple('RESTING', states.resting),
+    '',
+    tuple('GENERATION_STATES', states.all),
+    '',
+    '/** What each state may become. The table DocKtizo enforces, not a reading of it. */',
+    `export const TRANSITIONS = ${JSON.stringify(states.transitions ?? {}, null, 2)} as const;`,
+    '',
+    tuple('EVENT_TYPES', contract.event_types),
+    '',
+    tuple('OUTPUT_FORMATS', contract.output_formats),
+    '',
+    tuple('REQUIRED_CAPABILITIES', contract.required_capabilities),
+    '',
+    tuple('READINESS_STATUSES', contract.readiness_statuses),
+    '',
+    tuple('ERROR_CODES', Object.keys(contract.error_codes ?? {}).sort()),
+    '',
+    '/** Every error code, with what DocKtizo says it means. */',
+    `export const ERRORS = ${JSON.stringify(contract.error_codes ?? {}, null, 2)} as const;`,
+    '',
+  ].join('\n');
+}
+
+async function generateDocktizo() {
+  const openapiRaw = await resolveFirst(
+    'openapi',
+    docktizoSources('docs/api/openapi.json', DOCKTIZO_VENDOR, docktizoFromVenv),
+  );
+  const contractRaw = await resolveFirst(
+    'contract',
+    docktizoSources('docs/api/contract.json', DOCKTIZO_VENDOR_CONTRACT, async () => {
+      const res = await fetch(`${BASE_URL}/v1/contract`);
+      if (!res.ok) throw new Error(`GET ${BASE_URL}/v1/contract -> ${res.status}`);
+      return res.text();
+    }),
+  );
 
   const openapi = JSON.parse(openapiRaw);
+  const contract = JSON.parse(contractRaw);
   assertResolvable(openapi);
+
+  if (contract.schema_version !== 'docktizo-contract.v1') {
+    throw new Error(`unexpected contract schema_version "${contract.schema_version}"`);
+  }
 
   const metaTs = [
     DOCKTIZO_BANNER,
     'export const DOCKTIZO_CONTRACT = {',
-    `  docktizoVersion: ${JSON.stringify(openapi.info?.version ?? 'unknown')},`,
+    `  docktizoVersion: ${JSON.stringify(contract.version ?? openapi.info?.version ?? 'unknown')},`,
+    `  contractSchema: ${JSON.stringify(contract.schema_version)},`,
+    `  migrationHead: ${JSON.stringify(contract.migration_head ?? 'unknown')},`,
     `  routeCount: ${Object.keys(openapi.paths ?? {}).length},`,
     `  componentCount: ${Object.keys(openapi.components?.schemas ?? {}).length},`,
     `  openapiSha256: ${JSON.stringify(sha256(openapiRaw))},`,
+    `  contractSha256: ${JSON.stringify(sha256(contractRaw))},`,
     `  generatedAt: ${JSON.stringify(new Date().toISOString())},`,
     '} as const;',
     '',
@@ -453,8 +520,10 @@ async function generateDocktizo() {
   return {
     out: DOCKTIZO_OUT,
     vendorFile: DOCKTIZO_VENDOR,
+    extraVendor: { [DOCKTIZO_VENDOR_CONTRACT]: contractRaw },
     files: {
       'openapi.ts': DOCKTIZO_BANNER + astToString(await openapiTS(openapi)),
+      'contract.ts': buildDocktizoContract(contract),
       'meta.ts': metaTs,
     },
     fixtures: [],
@@ -462,6 +531,8 @@ async function generateDocktizo() {
     stats: {
       routes: Object.keys(openapi.paths ?? {}).length,
       components: Object.keys(openapi.components?.schemas ?? {}).length,
+      states: (contract.generation_states?.all ?? []).length,
+      events: (contract.event_types ?? []).length,
     },
   };
 }
@@ -479,7 +550,7 @@ async function main() {
     TARGET === 'docktizo'
       ? await generateDocktizo()
       : { ...(await generate()), out: OUT, vendorFile: join(VENDOR, 'openapi.json') };
-  const { files, fixtures, openapiRaw, stats, out, vendorFile } = result;
+  const { files, fixtures, openapiRaw, stats, out, vendorFile, extraVendor } = result;
 
   if (CHECK) {
     const stale = [];
@@ -511,13 +582,14 @@ async function main() {
   }
   // Snapshot so a machine without the upstream checkout can still regenerate.
   await writeFile(vendorFile, openapiRaw);
+  for (const [path, content] of Object.entries(extraVendor ?? {})) await writeFile(path, content);
 
   console.log(`\n  ${stats.routes} routes, ${stats.components} components`);
   if (stats.bundleDefs != null) {
     console.log(`  ${stats.bundleDefs} bundle types, ${stats.events} event types`);
     console.log(`  ${fixtures.length} fixtures\n`);
   } else {
-    console.log('  no bundle, no event catalogue, no fixtures — see docs/docktizo-gaps.md D2\n');
+    console.log(`  ${stats.states} states, ${stats.events} event types, from the published contract\n`);
   }
 }
 

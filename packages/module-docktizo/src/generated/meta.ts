@@ -1,15 +1,17 @@
 /**
  * DO NOT EDIT.
  *
- * Generated from a running DocKtizo by `npm run gen:types -- --target docktizo`.
- * DocKtizo commits no spec, so this and vendor/docktizo-openapi.json are the
- * only checked-in record of its contract. See docs/docktizo-gaps.md, D2.
+ * Generated from DocKtizo's published contract by
+ * `npm run gen:types -- --target docktizo`. Edit DocKtizo, not this file.
  */
 
 export const DOCKTIZO_CONTRACT = {
   docktizoVersion: "0.1.0a0",
-  routeCount: 21,
-  componentCount: 43,
-  openapiSha256: "fa118f7f798a37721d5365f491c67b90798afcf37f7870e60d578ca6ffe08a75",
-  generatedAt: "2026-08-09T20:16:45.050Z",
+  contractSchema: "docktizo-contract.v1",
+  migrationHead: "0018_worker_presence",
+  routeCount: 26,
+  componentCount: 54,
+  openapiSha256: "7bff006a33382b806410088dcdb09c2ed6240a6e1fff2cbcff5224f745e9a0db",
+  contractSha256: "b084d94f5385d754290032a44901a4fa9627b65c1323697ab20e4486e2461234",
+  generatedAt: "2026-08-11T02:26:59.531Z",
 } as const;
