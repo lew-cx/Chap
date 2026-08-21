@@ -5,3 +5,6 @@ dist/
 *.tsbuildinfo
 .DS_Store
 .chap/
+
+# Downloaded generation output from local demo runs.
+demo-artifacts/
