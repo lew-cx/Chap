@@ -236,6 +236,12 @@ export interface paths {
         /**
          * Stream Events
          * @description Stream runtime and request lifecycle events over SSE.
+         *
+         *     Each parameter narrows the stream and may be repeated or comma-separated.
+         *     Values within one parameter are alternatives; the parameters combine, so
+         *     `?types=token.delta&request_id=req-1` is one request's tokens and nothing
+         *     else. Filtering happens before an event is queued for this connection, so an
+         *     excluded event costs the connection nothing.
          */
         get: operations["stream_events_v1_events_get"];
         put?: never;
@@ -8305,7 +8311,16 @@ export interface operations {
     };
     stream_events_v1_events_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Event types to deliver. Repeatable or comma-separated. Values here are alternatives; separate filters combine. */
+                types?: ("system.ready" | "operation.progress" | "request.accepted" | "request.queued" | "request.failed" | "request.completed" | "prefill.started" | "model.scan.started" | "model.scan.completed" | "model.scan.failed" | "model.load.requested" | "model.load.joined" | "model.loading" | "model.loaded" | "model.load.failed" | "model.usage.acquired" | "model.usage.released" | "model.drain.requested" | "model.draining" | "model.unload.blocked" | "model.unloading" | "model.unloaded" | "model.unload.failed" | "audio.chunk" | "audio.transcription.started" | "audio.transcription.completed" | "audio.transcription.failed" | "audio.speech.started" | "audio.speech.completed" | "audio.speech.failed" | "document.parse.started" | "document.parse.completed" | "document.parse.failed" | "document.render.started" | "document.render.completed" | "document.render.failed" | "document.transform.started" | "document.transform.completed" | "document.transform.failed" | "cluster.token.issued" | "cluster.worker.enrolled" | "cluster.worker.heartbeat" | "cluster.plan.updated" | "cluster.pipeline.stage.completed" | "cluster.pipeline.completed" | "cluster.worker.recovered" | "autotune.completed" | "token.delta" | "reasoning.delta" | "speculation.started" | "speculation.accepted" | "tool.pending" | "tool.started" | "tool.finished" | "tool.failed")[];
+                /** @description Event scopes to deliver. Repeatable or comma-separated. Values here are alternatives; separate filters combine. */
+                scope?: ("system" | "request" | "job")[];
+                /** @description Deliver only events belonging to these requests. Repeatable or comma-separated. Values here are alternatives; separate filters combine. */
+                request_id?: string[];
+                /** @description Deliver only events about these models. Repeatable or comma-separated. Values here are alternatives; separate filters combine. */
+                model_id?: string[];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -8324,6 +8339,15 @@ export interface operations {
                      *     data: {"event_id":"evt-001","type":"request.completed","scope":"request","created_at":"2026-04-17T17:46:33Z","payload":{"request_id":"req-chat-001","path":"/v1/chat/completions"}}
                      */
                     "text/event-stream": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

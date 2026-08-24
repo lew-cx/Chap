@@ -656,9 +656,71 @@ async function main() {
     }
   });
 
+  /**
+   * One request's events, and nothing else.
+   *
+   * This is the property the events explorer now depends on: the filter is sent
+   * rather than applied on arrival, so a `token.delta` the caller did not ask
+   * for is never queued for the connection and never crosses the wire. Chap used
+   * to receive every token of every request and discard almost all of them.
+   *
+   * The same open connection answers G13's other half, so the frames are read
+   * once and both facts are taken off them.
+   */
+  let eventFrameIds = 0;
+
+  await check('event stream narrows at the server', async () => {
+    if (chatCandidatesThatRan.size === 0) throw new Error('no model has run; nothing would emit events');
+    const wanted = ['request.accepted', 'request.completed'];
+
+    const controller = new AbortController();
+    const res = await client.raw(
+      'GET',
+      `/v1/events?${wanted.map((type) => `types=${type}`).join('&')}`,
+      { accept: 'text/event-stream', signal: controller.signal },
+    );
+
+    const seen: string[] = [];
+    const collecting = (async () => {
+      for await (const frame of readSSE(res)) {
+        if (frame.id) eventFrameIds += 1;
+        if (frame.event) seen.push(frame.event);
+        if (seen.filter((type) => type === 'request.completed').length > 0) break;
+      }
+    })();
+
+    // Something has to happen for the stream to have anything to narrow.
+    await client.request('POST', '/v1/chat/completions', {
+      json: {
+        model: [...chatCandidatesThatRan][0],
+        messages: [{ role: 'user', content: 'hi' }],
+        max_tokens: 4,
+      },
+    });
+
+    await Promise.race([collecting, new Promise((resolve) => setTimeout(resolve, 8_000))]);
+    controller.abort();
+
+    const unwanted = seen.filter((type) => !wanted.includes(type));
+    if (seen.length === 0) throw new Error('a filtered subscription received nothing at all');
+    if (unwanted.length > 0) {
+      throw new Error(`filter asked for ${wanted.join(', ')} and also received ${[...new Set(unwanted)].join(', ')}`);
+    }
+    return `${seen.length} frames, all requested; 0 token deltas`;
+  });
+
   // --- gap probes ---------------------------------------------------------
 
   console.log('');
+
+  await gap('G13', '/v1/events cannot be resumed after a drop', async () => {
+    // Filtering landed; replay did not. A frame carries no `id:`, so there is no
+    // cursor to send back — `Last-Event-ID` has nothing to name even if the
+    // route read it. DocKtizo's generation stream puts its paged cursor on every
+    // frame, which is the shape this wants.
+    if (eventFrameIds > 0) return null;
+    return 'frames carry no id:, so a reconnect has no cursor to resume from';
+  });
 
   await gap('G11', 'error envelope on malformed requests', async () => {
     const res = await fetch(`${BASE}/v1/chat/completions`, {

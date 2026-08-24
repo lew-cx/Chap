@@ -35,7 +35,7 @@ export {
 export type { ChatStreamEvent, StreamOptions } from './stream.ts';
 
 export { subscribeEvents } from './events.ts';
-export type { EventStreamStatus, EventSubscription } from './events.ts';
+export type { EventFilter, EventStreamStatus, EventSubscription } from './events.ts';
 
 export { buildMultipart, partTypeFor } from './multipart.ts';
 export type { Upload } from './multipart.ts';

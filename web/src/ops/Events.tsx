@@ -1,14 +1,22 @@
 /**
  * The events explorer.
  *
- * Reads the same ring buffer the rail does — one subscription, two views. Every
- * filter here is client-side because LewLM accepts no query parameters on
- * `/v1/events` (docs/lewlm-gaps.md#g13); the type list is generated from the
- * contract, so a new event type in LewLM appears in this filter without a Chap
- * change.
+ * Reads the same ring buffer the rail does — one subscription, two views.
+ *
+ * The type picker and the token toggle are **sent to LewLM**, which narrows the
+ * stream before an event is queued for this connection. That is the difference
+ * between not displaying an event and not receiving it, and it matters at
+ * exactly one event per generated token.
+ *
+ * The filter names what it wants and has no negation, so "hide token.delta" is
+ * every other type — enumerated from `EVENT_TYPES`, which is generated from the
+ * contract, so it is exact today and stays exact when LewLM adds a type.
+ *
+ * The free-text box stays client-side. It is a substring search across three
+ * fields at once, which is not something the server offers or should.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { EVENT_TYPES } from '@chap/lewlm';
 
@@ -25,12 +33,16 @@ export function Events() {
   const clear = useEvents((state) => state.clear);
   const received = useEvents((state) => state.received);
   const dropped = useEvents((state) => state.dropped);
+  const setFilter = useEvents((state) => state.setFilter);
 
   const [type, setType] = useState('');
   const [needle, setNeedle] = useState('');
   const [hideTokens, setHideTokens] = useState(true);
   const [selected, setSelected] = useState<EventRecord | null>(null);
 
+  // What arrives is what was asked for, so the only work left here is the
+  // substring search. Records that predate a narrowing stay in the ring, which
+  // is why the type check below is not redundant.
   const filtered = useMemo(
     () =>
       events.filter((record) => {
@@ -38,14 +50,33 @@ export function Events() {
         const { event } = record;
         if (hideTokens && event.type.startsWith('token.')) return false;
         if (type && event.type !== type) return false;
-        if (needle) {
-          const hay = `${event.type} ${event.request_id ?? ''} ${event.model_id ?? ''} ${event.correlation_id ?? ''}`;
-          if (!hay.toLowerCase().includes(needle.toLowerCase())) return false;
-        }
-        return true;
+        if (!needle) return true;
+        const hay = `${event.type} ${event.request_id ?? ''} ${event.model_id ?? ''} ${event.correlation_id ?? ''}`;
+        return hay.toLowerCase().includes(needle.toLowerCase());
       }),
     [events, type, needle, hideTokens],
   );
+
+  /**
+   * This screen owns the subscription's filter while it is open, and gives it
+   * back when it closes.
+   *
+   * The two readers of the stream want different things: the telemetry rail
+   * exists to watch an unfiltered stream go past, and this explorer opens with
+   * `token.delta` hidden. Narrowing only matters while someone is looking at
+   * this screen, so that is exactly how long it lasts — rather than a filter
+   * that silently outlives the tab that set it.
+   */
+  useEffect(() => {
+    setFilter(
+      type
+        ? { types: [type] }
+        : hideTokens
+          ? { types: EVENT_TYPES.filter((name) => !name.startsWith('token.')) }
+          : {},
+    );
+    return () => setFilter({});
+  }, [type, hideTokens, setFilter]);
 
   /** Types actually seen, so the picker reflects this host rather than the spec. */
   const seen = useMemo(() => {
@@ -70,7 +101,11 @@ export function Events() {
     <>
       <Section
         title="filters"
-        hint={`${filtered.length} shown · ${received} received${dropped > 0 ? ` · ${dropped} aged out` : ''}`}
+        hint={
+          `${filtered.length} shown · ${received} received` +
+          `${dropped > 0 ? ` · ${dropped} aged out` : ''}` +
+          `${type || hideTokens ? ' · narrowed at the server' : ''}`
+        }
       >
         <div className="flex flex-wrap items-center gap-2">
           <select className="field text-xs" value={type} onChange={(event) => setType(event.target.value)}>

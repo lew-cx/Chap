@@ -7,11 +7,11 @@
  */
 
 export const CONTRACT = {
-  lewlmVersion: "0.4.1a0",
+  lewlmVersion: "0.4.2",
   bundleFormat: "lewlm-integration-bundle-v1",
   routeCount: 57,
   componentCount: 293,
   bundleSha256: "9bb321be09b09fa4de638779c32ca7a424304e52dbdc39b4f72d2c43ed2280f0",
-  openapiSha256: "5da8c9dcc81f7087d10e59623c0b2173e33c3537d70bd11cc6c760e58c69c465",
-  generatedAt: "2026-08-11T13:16:33.149Z",
+  openapiSha256: "01f1c578eba3f36dc135e97dea4ab328d1778e83c6dffea97ecf4f16cf4c67da",
+  generatedAt: "2026-08-23T06:08:04.208Z",
 } as const;

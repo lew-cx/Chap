@@ -33,6 +33,10 @@ export function TelemetryRail() {
   const status = useEvents((state) => state.status);
   const received = useEvents((state) => state.received);
   const dropped = useEvents((state) => state.dropped);
+  // The stream is filtered at the server now, so the rail is a tail of what was
+  // asked for rather than of everything. Saying so is the difference between a
+  // quiet host and a narrow subscription.
+  const narrowed = useEvents((state) => Object.keys(state.filter).length > 0);
 
   const metrics = stats?.request_metrics;
 
@@ -77,11 +81,16 @@ export function TelemetryRail() {
           <span className="numeric" style={{ color: 'var(--skin-faint)' }}>
             {received}
             {dropped > 0 ? ` · ${dropped} aged out` : ''}
+            {narrowed ? ' · filtered' : ''}
           </span>
         </h2>
 
         {events.length === 0 ? (
-          <p className="micro-label">idle — send a request and watch it arrive</p>
+          <p className="micro-label">
+            {narrowed
+              ? 'idle — the subscription is narrowed; widen it in Ops → Events'
+              : 'idle — send a request and watch it arrive'}
+          </p>
         ) : (
           <VirtualList items={events} rowHeight={18} follow className="hairline flex-1 border-t pt-1">
             {(record) => <EventRow record={record} compact />}

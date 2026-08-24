@@ -7,9 +7,16 @@
  * `RequestGuard` is HTTP middleware, so the WS route skips the API key and the
  * rate limit entirely (docs/lewlm-gaps.md#g14).
  *
- * LewLM has no replay and no server-side filtering (#g13), so a reconnect loses
- * whatever happened while the socket was down. That is reported rather than
- * hidden: `onStatus` fires with `reconnected`, and the UI marks the gap.
+ * The stream can be narrowed at the server. Values inside one dimension are
+ * alternatives and dimensions combine, so `{ types: ['token.delta'],
+ * request_id: ['req-1'] }` is one request's tokens and nothing else. LewLM
+ * applies this before an event is queued for the connection, which makes it a
+ * backpressure control rather than a convenience — an excluded event is never
+ * serialized and never sent.
+ *
+ * There is still no replay (#g13), so a reconnect loses whatever happened while
+ * the socket was down. That is reported rather than hidden: `onStatus` fires
+ * with `reconnected`, and the UI marks the gap.
  */
 
 import type { Client } from './http.ts';
@@ -18,8 +25,24 @@ import type { StreamEvent } from './types.ts';
 
 export type EventStreamStatus = 'connecting' | 'open' | 'reconnected' | 'closed';
 
+/**
+ * What to deliver. Every dimension is optional; an empty filter admits
+ * everything, which is what an unfiltered subscriber gets.
+ *
+ * There is no negation — the filter names what it wants, not what it does not.
+ * A caller that means "everything except tokens" has to enumerate the rest,
+ * which `EVENT_TYPES` makes exact rather than a guess.
+ */
+export interface EventFilter {
+  types?: readonly string[];
+  scope?: readonly string[];
+  request_id?: readonly string[];
+  model_id?: readonly string[];
+}
+
 export interface EventSubscription {
   signal: AbortSignal;
+  filter?: EventFilter;
   onEvent: (event: StreamEvent) => void;
   onStatus?: (status: EventStreamStatus, detail?: string) => void;
 }
@@ -27,9 +50,19 @@ export interface EventSubscription {
 const FIRST_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 10_000;
 
+/** Repeatable query parameters, which `RequestOptions.query` cannot express. */
+function search(filter: EventFilter | undefined): string {
+  const params = new URLSearchParams();
+  for (const [key, values] of Object.entries(filter ?? {})) {
+    for (const value of values ?? []) params.append(key, value);
+  }
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
 export async function subscribeEvents(
   client: Client,
-  { signal, onEvent, onStatus }: EventSubscription,
+  { signal, filter, onEvent, onStatus }: EventSubscription,
 ): Promise<void> {
   let retry = FIRST_RETRY_MS;
   let everOpened = false;
@@ -37,7 +70,7 @@ export async function subscribeEvents(
   while (!signal.aborted) {
     try {
       onStatus?.('connecting');
-      const res = await client.raw('GET', '/v1/events', {
+      const res = await client.raw('GET', `/v1/events${search(filter)}`, {
         accept: 'text/event-stream',
         signal,
       });
