@@ -32,11 +32,13 @@ import { Labelled, Stat } from '../components/Field.tsx';
 import { Markdown } from '../components/Markdown.tsx';
 import { lewlm } from '../lib/client.ts';
 import { useModels } from '../lib/useModels.ts';
+import { useDictation } from '../lib/useDictation.ts';
 import { useSpeech } from '../lib/useSpeech.ts';
 import { useStructuredSupport } from '../lib/useStructuredSupport.ts';
 import { useTokenCount } from '../lib/useTokenCount.ts';
 import { useGrounding } from '../store/grounding.ts';
 import { ContextPanel } from './ContextPanel.tsx';
+import { DictationPanel } from './DictationPanel.tsx';
 import { FormatPanel } from './FormatPanel.tsx';
 import { Message } from './Message.tsx';
 import { RunInspectors, type RunResult } from './RunInspectors.tsx';
@@ -52,7 +54,15 @@ import {
 } from './request.ts';
 
 const VISIBILITIES: ReasoningVisibility[] = ['hidden', 'summarized', 'raw_model_emitted'];
-type Drawer = 'sampling' | 'context' | 'format' | 'system' | 'sessions' | 'speech' | null;
+type Drawer =
+  | 'sampling'
+  | 'context'
+  | 'format'
+  | 'system'
+  | 'sessions'
+  | 'speech'
+  | 'dictation'
+  | null;
 
 interface Turn {
   role: 'user' | 'assistant';
@@ -126,6 +136,21 @@ export function ChatScreen() {
   const promptTokens = useTokenCount(prompt, state.model);
   const structuredSupport = useStructuredSupport(state.model);
   const speech = useSpeech();
+
+  // A transcript is appended rather than assigned: an utterance is one more
+  // thing said, and clobbering a half-typed prompt would lose work the user can
+  // see on screen.
+  const dictation = useDictation((text) =>
+    setPrompt((current) => (current.trim() ? `${current.trimEnd()} ${text}` : text)),
+  );
+
+  // Barge-in. Opening the microphone while a reply is being read aloud has to
+  // silence it — the clips are already scheduled on the audio clock, and echo
+  // cancellation is not the answer to a machine talking over the person.
+  const listen = () => {
+    speech.cancel();
+    dictation.hold();
+  };
 
   const set = <K extends keyof ComposerState>(key: K, value: ComposerState[K]) =>
     setState((current) => ({ ...current, [key]: value }));
@@ -440,13 +465,62 @@ export function ChatScreen() {
 
           <span className="hairline mx-1 h-4 border-l" />
 
-          {(['sampling', 'context', 'format', 'system', 'sessions', 'speech'] as const).map((panel) => (
+          {/* Push-to-talk: held for exactly the length of the utterance, so there
+              is no endpointing to get wrong. The transcript lands in the composer
+              and waits — a mis-heard prompt sent automatically is worse than a
+              typed one. */}
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={dictation.state === 'listening'}
+            disabled={!dictation.available}
+            title={
+              dictation.available
+                ? 'hold to speak; release to transcribe'
+                : (dictation.capability.reason ?? 'no transcription model on this host')
+            }
+            style={
+              dictation.error != null
+                ? { borderColor: 'var(--skin-danger)', color: 'var(--skin-danger)' }
+                : undefined
+            }
+            onPointerDown={(event) => {
+              // Capture the pointer so sliding off the chip mid-sentence does not
+              // silently end the utterance.
+              event.currentTarget.setPointerCapture(event.pointerId);
+              listen();
+            }}
+            onPointerUp={() => dictation.release()}
+            onPointerCancel={() => dictation.release()}
+            onKeyDown={(event) => {
+              if ((event.key === ' ' || event.key === 'Enter') && !event.repeat) {
+                event.preventDefault();
+                listen();
+              }
+            }}
+            onKeyUp={(event) => {
+              if (event.key === ' ' || event.key === 'Enter') dictation.release();
+            }}
+          >
+            {dictation.state === 'listening'
+              ? `listening ${meter(dictation.level)}`
+              : dictation.state === 'transcribing'
+                ? 'transcribing…'
+                : 'hold to talk'}
+          </button>
+
+          <span className="hairline mx-1 h-4 border-l" />
+
+          {(
+            ['sampling', 'context', 'format', 'system', 'sessions', 'speech', 'dictation'] as const
+          ).map((panel) => (
             <Toggle
               key={panel}
               label={panel}
               flagged={
                 (panel === 'format' && formatError != null) ||
-                (panel === 'speech' && speech.error != null)
+                (panel === 'speech' && speech.error != null) ||
+                (panel === 'dictation' && dictation.error != null)
               }
               on={drawer === panel || (panel === 'sessions' && state.sessionId != null)}
               onClick={() => setDrawer(drawer === panel ? null : panel)}
@@ -527,6 +601,7 @@ export function ChatScreen() {
               />
             )}
             {drawer === 'speech' && <SpeechPanel speech={speech} />}
+            {drawer === 'dictation' && <DictationPanel dictation={dictation} />}
             {drawer === 'system' && (
               <Labelled label="system_prompt">
                 <textarea
@@ -587,6 +662,15 @@ export function ChatScreen() {
       </div>
     </div>
   );
+}
+
+/**
+ * Five blocks of input level. Peak rather than RMS: what this has to answer is
+ * "is it hearing me at all", and peak moves on the first syllable.
+ */
+function meter(level: number): string {
+  const lit = Math.min(5, Math.round(level * 8));
+  return '\u2588'.repeat(lit) + '\u2591'.repeat(5 - lit);
 }
 
 function Toggle({
