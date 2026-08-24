@@ -13,6 +13,9 @@
  * rejects a request that tries to claim one. The workspace this tab is acting in
  * is shown instead, from `/v1/whoami` — the request cannot name it, so the UI
  * should.
+ *
+ * There is no document-type field either, for the same reason in reverse: the
+ * workflow is standing context for the whole screen and is chosen in its header.
  */
 
 import { useEffect, useState } from 'react';
@@ -23,116 +26,71 @@ import { Json } from '@/components/Json.tsx';
 import { Missing, Section } from '@/components/Screen.tsx';
 import { Table } from '@/components/Table.tsx';
 
-import { docktizo, DocktizoError, readiness } from '../client.ts';
+import { docktizo, readiness } from '../client.ts';
 import { useWorkbench } from '../store.ts';
-import type {
-  DocumentTypeDetail,
-  GenerationAccepted,
-  OutputFormat,
-  TemplateSummary,
-  WorkflowReadiness,
-} from '../types.ts';
+import type { GenerationAccepted, OutputFormat, TemplateSummary, WorkflowReadiness } from '../types.ts';
+import { Failure, useAction } from './Shared.tsx';
 
 export function Generate() {
   const documentType = useWorkbench((state) => state.documentType);
-  const selectDocumentType = useWorkbench((state) => state.select);
+  const catalogFailure = useWorkbench((state) => state.catalogFailure);
   const sources = useWorkbench((state) => state.sources);
   const watch = useWorkbench((state) => state.watch);
+  const load = useWorkbench((state) => state.load);
+  const workspace = useWorkbench((state) => state.whoami?.workspace_id ?? null);
 
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
   const [inputData, setInputData] = useState('{\n  \n}');
-  const [formats, setFormats] = useState<OutputFormat[]>(['docx']);
+  const [formats, setFormats] = useState<OutputFormat[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [templateId, setTemplateId] = useState('');
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID());
   const [accepted, setAccepted] = useState<GenerationAccepted | null>(null);
-  const [failure, setFailure] = useState<DocktizoError | Error | null>(null);
-  const [busy, setBusy] = useState(false);
   const [runnable, setRunnable] = useState<WorkflowReadiness | null>(null);
-  const [availableTypes, setAvailableTypes] = useState<DocumentTypeDetail[]>([]);
-  const [discoveringTypes, setDiscoveringTypes] = useState(false);
-  const [discoveryFailure, setDiscoveryFailure] = useState<string | null>(null);
-  const workspace = useWorkbench((state) => state.whoami?.workspace_id ?? null);
+  const { run, busy, failure } = useAction();
 
-  // The workbench selection is intentionally session-only, so a page refresh
-  // clears it. Recover here instead of rendering what looks like an empty tab.
-  // A single installed workflow needs no chooser; multiple workflows remain an
-  // explicit user decision.
-  useEffect(() => {
-    if (documentType) return;
-    let active = true;
-    setDiscoveringTypes(true);
-    setDiscoveryFailure(null);
-    docktizo.documentTypes
-      .list()
-      .then((result) => {
-        if (!active) return;
-        setAvailableTypes(result.items);
-        if (result.items.length === 1) selectDocumentType(result.items[0]!);
-      })
-      .catch((cause: unknown) => {
-        if (active) setDiscoveryFailure(cause instanceof Error ? cause.message : String(cause));
-      })
-      .finally(() => {
-        if (active) setDiscoveringTypes(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [documentType, selectDocumentType]);
+  const workflowId = documentType?.workflow_id;
+  const supported = documentType?.supported_output_formats ?? [];
+
+  useEffect(load, [load]);
 
   useEffect(() => {
-    if (!documentType) return;
+    if (!workflowId) return;
     docktizo.templates
-      .list(documentType.workflow_id)
+      .list(workflowId)
       .then((result) => setTemplates(result.items))
       .catch(() => setTemplates([]));
-  }, [documentType?.workflow_id]);
+    // Two workflows rarely render the same formats, and a format left selected
+    // after a switch would be a request nothing on screen shows you making.
+    setFormats((current) => {
+      const kept = current.filter((format) => supported.includes(format));
+      return kept.length > 0 ? kept : supported.slice(0, 1);
+    });
+    setTemplateId('');
+  }, [workflowId]);
 
   // Whether this host can actually run the workflow, before the button is
   // pressed. DocKtizo rejects at submit time too, but a request that cannot
   // succeed is better not sent — the same argument as CapabilityNotice makes
   // for LewLM, now possible because readiness reports per-workflow capabilities.
   useEffect(() => {
-    if (!documentType) return;
+    if (!workflowId) return;
     readiness()
       .then((report) =>
-        setRunnable(
-          (report.workflows ?? []).find((entry) => entry.workflow_id === documentType.workflow_id) ?? null,
-        ),
+        setRunnable((report.workflows ?? []).find((entry) => entry.workflow_id === workflowId) ?? null),
       )
       .catch(() => setRunnable(null));
-  }, [documentType?.workflow_id]);
+  }, [workflowId]);
 
   if (!documentType) {
     return (
-      <Section title="choose a document type" hint="required before generation">
-        <div className="panel">
-          {discoveringTypes ? (
-            <p className="text-sm">Loading installed document types…</p>
-          ) : discoveryFailure ? (
-            <p className="text-sm" style={{ color: 'var(--skin-danger)' }}>
-              {discoveryFailure}
-            </p>
-          ) : availableTypes.length === 0 ? (
-            <p className="text-sm">No document workflows are available to this workspace.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {availableTypes.map((item) => (
-                <button
-                  key={item.workflow_id}
-                  type="button"
-                  className="btn-accent"
-                  onClick={() => selectDocumentType(item)}
-                >
-                  {item.workflow_id}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      <Section title="no document type">
+        <Missing>
+          {catalogFailure ??
+            'DocKtizo has no workflows installed, or this token lacks document_types:read.'}
+        </Missing>
       </Section>
     );
   }
@@ -140,11 +98,9 @@ export function Generate() {
   const toggle = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 
-  const submit = async () => {
-    setBusy(true);
-    setFailure(null);
-    setAccepted(null);
-    try {
+  const submit = () =>
+    run(async () => {
+      setAccepted(null);
       const result = await docktizo.generations.create(
         {
           document_type: documentType.workflow_id,
@@ -159,12 +115,7 @@ export function Generate() {
       );
       setAccepted(result);
       watch(result.generation_id);
-    } catch (cause) {
-      setFailure(cause instanceof Error ? cause : new Error(String(cause)));
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
   return (
     <>
@@ -193,7 +144,7 @@ export function Generate() {
               value={templateId}
               onChange={(event) => setTemplateId(event.target.value)}
             >
-              <option value="">none</option>
+              <option value="">workflow default</option>
               {templates.map((template) => (
                 <option key={template.template_id} value={template.template_id}>
                   {template.name}
@@ -204,7 +155,7 @@ export function Generate() {
 
           <Labelled label="output formats">
             <div className="flex flex-wrap gap-2">
-              {(documentType.supported_output_formats ?? []).map((format) => (
+              {supported.map((format) => (
                 <button
                   key={format}
                   type="button"
@@ -284,7 +235,7 @@ export function Generate() {
           <button type="button" className="chip" onClick={() => setIdempotencyKey(crypto.randomUUID())}>
             new key
           </button>
-          <button type="button" className="btn-accent" disabled={busy} onClick={() => void submit()}>
+          <button type="button" className="btn-accent" disabled={busy} onClick={submit}>
             {busy ? 'submitting…' : 'submit generation'}
           </button>
         </div>
@@ -299,31 +250,7 @@ export function Generate() {
           </div>
         )}
 
-        {failure && (
-          <div className="panel" style={{ borderColor: 'var(--skin-danger)' }}>
-            {/* Verbatim. DocKtizo owns validation; paraphrasing it here would
-                hide the one thing this screen is for. */}
-            <p className="micro-label" style={{ color: 'var(--skin-danger)' }}>
-              {failure instanceof DocktizoError
-                ? `${failure.status} · ${failure.code}${failure.retryable ? ' · retryable' : ''}`
-                : 'request failed'}
-            </p>
-            <p className="mt-1 text-sm">{failure.message}</p>
-
-            {failure instanceof DocktizoError && failure.issues.length > 0 && (
-              // Which fields, not how many. DocKtizo returns locations and
-              // structural codes and withholds the values, which is the right
-              // trade: the field names are already public in the schema above.
-              <Table
-                columns={[
-                  { key: 'loc', label: 'field', render: (row) => row.location },
-                  { key: 'code', label: 'problem', render: (row) => row.code },
-                ]}
-                rows={failure.issues}
-              />
-            )}
-          </div>
-        )}
+        <Failure failure={failure} />
       </Section>
     </>
   );

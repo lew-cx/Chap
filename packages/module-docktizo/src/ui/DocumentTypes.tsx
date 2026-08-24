@@ -4,34 +4,33 @@
  * The `input_schema` shown here is a real JSON Schema, published per document
  * type — which is why the generate tab writes no validation. Chap shows the
  * schema, DocKtizo enforces it.
+ *
+ * A version is a document type in its own right. `status_report.v1` and
+ * `status_report.v2` are separate rows with separate schemas, separate
+ * validation policies and incompatible templates, and nothing here resolves to
+ * "the newest" — DocKtizo does not offer that and Chap does not invent it. The
+ * only way between them is an explicit migration, in the document tab.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import { Json } from '@/components/Json.tsx';
 import { Section } from '@/components/Screen.tsx';
 import { Stat } from '@/components/Field.tsx';
 import { Table } from '@/components/Table.tsx';
 
-import { docktizo } from '../client.ts';
 import { useWorkbench } from '../store.ts';
 import type { DocumentTypeDetail } from '../types.ts';
 
 export function DocumentTypes() {
-  const [items, setItems] = useState<DocumentTypeDetail[]>([]);
-  const [failure, setFailure] = useState<string | null>(null);
+  const types = useWorkbench((state) => state.types);
+  const catalogFailure = useWorkbench((state) => state.catalogFailure);
   const selected = useWorkbench((state) => state.documentType);
   const select = useWorkbench((state) => state.select);
   const whoami = useWorkbench((state) => state.whoami);
-  const identify = useWorkbench((state) => state.identify);
+  const load = useWorkbench((state) => state.load);
 
-  useEffect(() => {
-    identify();
-    docktizo.documentTypes
-      .list()
-      .then((result) => setItems(result.items))
-      .catch((cause: unknown) => setFailure(cause instanceof Error ? cause.message : String(cause)));
-  }, []);
+  useEffect(load, [load]);
 
   return (
     <>
@@ -55,7 +54,7 @@ export function DocumentTypes() {
         </Section>
       )}
 
-      <Section title="document types" hint={`${items.length} installed`}>
+      <Section title="document types" hint={`${types.length} installed`}>
         <Table
           columns={[
             { key: 'id', label: 'workflow', render: (row) => row.workflow_id },
@@ -71,16 +70,16 @@ export function DocumentTypes() {
               render: (row) => (row.requires_review ? 'required' : '—'),
             },
           ]}
-          rows={items}
-          onSelect={select}
+          rows={types}
+          onSelect={(row) => select(row.workflow_id)}
           selected={(row) => row.workflow_id === selected?.workflow_id}
           empty={
-            failure ??
+            catalogFailure ??
             'no document types — a DocKtizo with no workflows installed, or a token without document_types:read'
           }
         />
         <p className="micro-label mt-2">
-          Select one to use it in the generate tab.
+          Selecting one here is the same choice as the picker in the header; every tab follows it.
         </p>
       </Section>
 

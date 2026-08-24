@@ -149,6 +149,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Documents */
+        get: operations["list_documents_v1_documents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{document_id}": {
         parameters: {
             query?: never;
@@ -160,6 +177,46 @@ export interface paths {
         get: operations["get_document_v1_documents__document_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{document_id}/migrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Document Migration */
+        post: operations["create_document_migration_v1_documents__document_id__migrations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents/{document_id}/migrations/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Document Migration
+         * @description Report what a version change would do, without changing anything.
+         *
+         *     A caller cannot acknowledge consequences it has not been shown, so the
+         *     submit route refuses until the codes reported here are echoed back.
+         */
+        post: operations["preview_document_migration_v1_documents__document_id__migrations_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -640,7 +697,7 @@ export interface components {
          * AuditAction
          * @enum {string}
          */
-        AuditAction: "authentication" | "authorization" | "generation_requested" | "generation_completed" | "generation_failed" | "source_created" | "source_attached" | "template_created" | "template_selected" | "revision_requested" | "revision_created" | "manual_override_submitted" | "approval_decided" | "cancellation_requested" | "cancellation_acknowledged" | "artifact_downloaded" | "artifact_deleted" | "recovery_stale_listed" | "recovery_retry_submitted" | "artifact_reconciliation_run" | "retention_executed" | "operator_configuration_changed";
+        AuditAction: "authentication" | "authorization" | "generation_requested" | "generation_completed" | "generation_failed" | "source_created" | "source_attached" | "template_created" | "template_selected" | "revision_requested" | "revision_created" | "manual_override_submitted" | "workflow_migration_previewed" | "workflow_migration_submitted" | "approval_decided" | "cancellation_requested" | "cancellation_acknowledged" | "artifact_downloaded" | "artifact_deleted" | "recovery_stale_listed" | "recovery_retry_submitted" | "artifact_reconciliation_run" | "retention_executed" | "operator_configuration_changed";
         /**
          * AuditOutcome
          * @enum {string}
@@ -709,7 +766,7 @@ export interface components {
          * @description Explicit public and operator actions; absence is always a denial.
          * @enum {string}
          */
-        AuthorizationAction: "document_types:read" | "sources:read" | "sources:create" | "templates:read" | "templates:create" | "assets:read" | "assets:create" | "generations:read" | "generations:create" | "generations:cancel" | "events:read" | "audit:read" | "documents:read" | "revisions:read" | "artifacts:read" | "artifacts:download" | "revisions:create" | "manual_overrides:create" | "approvals:read" | "approvals:create" | "recovery:read" | "recovery:retry" | "recovery:reconcile" | "retention:execute";
+        AuthorizationAction: "document_types:read" | "sources:read" | "sources:create" | "templates:read" | "templates:create" | "assets:read" | "assets:create" | "generations:read" | "generations:create" | "generations:cancel" | "events:read" | "audit:read" | "documents:read" | "revisions:read" | "artifacts:read" | "artifacts:download" | "revisions:create" | "manual_overrides:create" | "migrations:read" | "migrations:create" | "approvals:read" | "approvals:create" | "recovery:read" | "recovery:retry" | "recovery:reconcile" | "retention:execute";
         /**
          * BrandStyleName
          * @enum {string}
@@ -737,6 +794,15 @@ export interface components {
             /** Safe Code */
             safe_code?: string | null;
             status: components["schemas"]["ReadinessStatus"];
+        };
+        /** DocumentListResponse */
+        DocumentListResponse: {
+            /** Has More */
+            has_more: boolean;
+            /** Items */
+            items: components["schemas"]["DocumentResponse"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /**
          * DocumentResponse
@@ -792,6 +858,8 @@ export interface components {
             input_schema?: {
                 [key: string]: unknown;
             } | null;
+            /** Migration Targets */
+            migration_targets?: string[];
             /** Required Capabilities */
             required_capabilities: string[];
             /** Requires Review */
@@ -809,7 +877,7 @@ export interface components {
          * EventType
          * @enum {string}
          */
-        EventType: "GENERATION_ACCEPTED" | "GENERATION_PLANNING" | "SOURCE_GATHERING_STARTED" | "SOURCE_GATHERING_COMPLETED" | "RETRIEVAL_STARTED" | "RETRIEVAL_COMPLETED" | "SECTION_GENERATION_STARTED" | "SECTION_GENERATION_COMPLETED" | "VALIDATION_STARTED" | "VALIDATION_FAILED" | "REPAIR_STARTED" | "REPAIR_COMPLETED" | "COMPILATION_STARTED" | "COMPILATION_COMPLETED" | "RENDER_STARTED" | "RENDER_COMPLETED" | "GENERATION_COMPLETED" | "GENERATION_FAILED" | "CANCELLATION_REQUESTED" | "CANCELLATION_ACKNOWLEDGED" | "GENERATION_CANCELLED" | "REVISION_CREATED" | "MANUAL_OVERRIDE_CREATED" | "APPROVAL_REQUESTED" | "REVISION_APPROVED" | "CHANGES_REQUESTED" | "REVISION_REJECTED";
+        EventType: "GENERATION_ACCEPTED" | "GENERATION_PLANNING" | "SOURCE_GATHERING_STARTED" | "SOURCE_GATHERING_COMPLETED" | "RETRIEVAL_STARTED" | "RETRIEVAL_COMPLETED" | "SECTION_GENERATION_STARTED" | "SECTION_GENERATION_COMPLETED" | "VALIDATION_STARTED" | "VALIDATION_FAILED" | "REPAIR_STARTED" | "REPAIR_COMPLETED" | "COMPILATION_STARTED" | "COMPILATION_COMPLETED" | "RENDER_STARTED" | "RENDER_COMPLETED" | "GENERATION_COMPLETED" | "GENERATION_FAILED" | "CANCELLATION_REQUESTED" | "CANCELLATION_ACKNOWLEDGED" | "GENERATION_CANCELLED" | "REVISION_CREATED" | "MANUAL_OVERRIDE_CREATED" | "WORKFLOW_MIGRATION_APPLIED" | "APPROVAL_REQUESTED" | "REVISION_APPROVED" | "CHANGES_REQUESTED" | "REVISION_REJECTED";
         /** GenerationAcceptedResponse */
         GenerationAcceptedResponse: {
             /** Client Supplied Idempotency Key */
@@ -853,6 +921,53 @@ export interface components {
          *         "project_name": "Apollo",
          *         "reporting_date": "2026-07-29",
          *         "reporting_period": "Week 30"
+         *       },
+         *       "output_formats": [
+         *         "docx",
+         *         "pdf"
+         *       ]
+         *     }
+         * @example {
+         *       "document_type": "executive_memo.v1",
+         *       "input_data": {
+         *         "author": "Strategy office",
+         *         "facts": [
+         *           "The bounded pilot completed."
+         *         ],
+         *         "memo_date": "2026-08-21",
+         *         "purpose": "Support an executive funding decision.",
+         *         "recipients": [
+         *           "Executive team"
+         *         ],
+         *         "subject": "Platform investment"
+         *       },
+         *       "output_formats": [
+         *         "docx",
+         *         "pdf"
+         *       ]
+         *     }
+         * @example {
+         *       "document_type": "proposal.v1",
+         *       "input_data": {
+         *         "approach_facts": [
+         *           "Use fixed section checkpoints"
+         *         ],
+         *         "call_to_action": "Approve a discovery workshop.",
+         *         "client_context": "Northwind needs generation that survives interruption.",
+         *         "client_name": "Northwind",
+         *         "facts": [
+         *           "Completed stages are retained durably."
+         *         ],
+         *         "problem_opportunity": "Interrupted work currently loses progress.",
+         *         "proposal_date": "2026-08-22",
+         *         "purpose": "Improve document operations.",
+         *         "risks": [
+         *           "Adoption delay"
+         *         ],
+         *         "scope_deliverables": [
+         *           "Durable proposal workflow"
+         *         ],
+         *         "title": "Durable operations proposal"
          *       },
          *       "output_formats": [
          *         "docx",
@@ -1020,6 +1135,24 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** MigrationNoticeResponse */
+        MigrationNoticeResponse: {
+            /** Acknowledgement Required */
+            acknowledgement_required: boolean;
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Path */
+            path: (string | number)[];
+            severity: components["schemas"]["MigrationSeverity"];
+        };
+        /**
+         * MigrationSeverity
+         * @description How much a caller has to care about one mapping consequence.
+         * @enum {string}
+         */
+        MigrationSeverity: "info" | "warning" | "loss";
         /**
          * OutputFormat
          * @enum {string}
@@ -1102,7 +1235,7 @@ export interface components {
          * RevisionMode
          * @enum {string}
          */
-        RevisionMode: "generated" | "manual_override";
+        RevisionMode: "generated" | "manual_override" | "migration";
         /**
          * RevisionResponse
          * @description Revision detail with public artifact metadata only.
@@ -1129,6 +1262,8 @@ export interface components {
             execution_state: components["schemas"]["GenerationState"];
             /** Generation Id */
             generation_id: string;
+            /** Migration Policy Version */
+            migration_policy_version?: string | null;
             /** Output Formats */
             output_formats: components["schemas"]["OutputFormat"][];
             /** Parent Revision Id */
@@ -1142,6 +1277,8 @@ export interface components {
             revision_number: number;
             /** Source Reference Ids */
             source_reference_ids: string[];
+            /** Source Workflow Id */
+            source_workflow_id?: string | null;
             /** Validation Report Id */
             validation_report_id: string;
             /** Workflow Id */
@@ -1169,6 +1306,8 @@ export interface components {
             execution_state: components["schemas"]["GenerationState"];
             /** Generation Id */
             generation_id: string;
+            /** Migration Policy Version */
+            migration_policy_version?: string | null;
             /** Output Formats */
             output_formats: components["schemas"]["OutputFormat"][];
             /** Parent Revision Id */
@@ -1180,6 +1319,8 @@ export interface components {
             revision_mode: components["schemas"]["RevisionMode"];
             /** Revision Number */
             revision_number: number;
+            /** Source Workflow Id */
+            source_workflow_id?: string | null;
             /** Workflow Id */
             workflow_id: string;
             /** Workflow Version */
@@ -1384,6 +1525,71 @@ export interface components {
             subject_id: string;
             /** Workspace Id */
             workspace_id: string;
+        };
+        /**
+         * WorkflowMigrationCreateRequest
+         * @description An explicit request to move one document onto a new workflow version.
+         *
+         *     Nothing here is optional by accident: the caller states the version it is on,
+         *     the version it wants, which template the new version renders through, and
+         *     which reported consequences it accepts.
+         */
+        WorkflowMigrationCreateRequest: {
+            /** Acknowledged Notices */
+            acknowledged_notices?: string[];
+            /** Metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** Parent Revision Id */
+            parent_revision_id: string;
+            /** Reason */
+            reason: string;
+            /** Source Workflow Id */
+            source_workflow_id: string;
+            /** Target Template Id */
+            target_template_id?: string | null;
+            /** Target Workflow Id */
+            target_workflow_id: string;
+            /**
+             * Use Target Default Template
+             * @default false
+             */
+            use_target_default_template: boolean;
+        };
+        /**
+         * WorkflowMigrationPreviewResponse
+         * @description Everything a caller must see before a migration may be submitted.
+         */
+        WorkflowMigrationPreviewResponse: {
+            /** Candidate Spec Hash */
+            candidate_spec_hash: string;
+            /** Candidate Valid */
+            candidate_valid: boolean;
+            /** Document Id */
+            document_id: string;
+            /** Loses Content */
+            loses_content: boolean;
+            /** Migration Policy Version */
+            migration_policy_version: string;
+            /** Notices */
+            notices: components["schemas"]["MigrationNoticeResponse"][];
+            /** Parent Revision Id */
+            parent_revision_id: string;
+            /** Required Acknowledgements */
+            required_acknowledgements: string[];
+            /** Source Template Id */
+            source_template_id: string | null;
+            /** Source Workflow Id */
+            source_workflow_id: string;
+            /** Target Template Id */
+            target_template_id: string | null;
+            /** Target Template Policy */
+            target_template_policy: string;
+            /** Target Workflow Id */
+            target_workflow_id: string;
+            /** Validation Issue Codes */
+            validation_issue_codes: string[];
         };
         /** WorkflowReadiness */
         WorkflowReadiness: {
@@ -1614,6 +1820,38 @@ export interface operations {
             };
         };
     };
+    list_documents_v1_documents_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_document_v1_documents__document_id__get: {
         parameters: {
             query?: never;
@@ -1632,6 +1870,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_document_migration_v1_documents__document_id__migrations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowMigrationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerationAcceptedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_document_migration_v1_documents__document_id__migrations_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowMigrationCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowMigrationPreviewResponse"];
                 };
             };
             /** @description Validation Error */

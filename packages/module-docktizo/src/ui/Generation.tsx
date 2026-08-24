@@ -11,28 +11,32 @@
  * streams, reused here without a line of change because DocKtizo now speaks the
  * same wire format. That is the argument for keeping one client package rather
  * than one per upstream.
+ *
+ * Where this tab ends is the point: a run that produced a document hands its id
+ * to the document tab, which is where review, revision and version migration
+ * happen. `awaiting_review` is a resting state, not a terminal one.
  */
 
 import { useEffect, useState } from 'react';
 
 import { readSSE } from '@chap/lewlm';
 
-import { Disclosure } from '@/components/Disclosure.tsx';
 import { Stat } from '@/components/Field.tsx';
-import { Json } from '@/components/Json.tsx';
 import { StatusDot } from '@/components/Nav.tsx';
 import { Missing, Section } from '@/components/Screen.tsx';
 import { Table } from '@/components/Table.tsx';
 
-import { artifactDownloadUrl, docktizo } from '../client.ts';
+import { docktizo } from '../client.ts';
 import { useWorkbench } from '../store.ts';
 import {
   PIPELINE_ORDER,
+  RESTING,
   TERMINAL,
   type ArtifactMetadata,
   type GenerationEvent,
   type GenerationStatus,
 } from '../types.ts';
+import { Artifacts } from './Shared.tsx';
 
 /** What `stream_completed` carries when the log is done with us. */
 interface StreamCompleted {
@@ -40,14 +44,16 @@ interface StreamCompleted {
   checkpoint: string;
 }
 
-const isTerminal = (state: GenerationStatus['state']) =>
-  (TERMINAL as readonly string[]).includes(state);
+const isIn = (set: readonly string[], state: GenerationStatus['state']) => set.includes(state);
 
 export function Generation() {
   const generationId = useWorkbench((state) => state.generationId);
   const watch = useWorkbench((state) => state.watch);
   const [entered, setEntered] = useState('');
 
+  // There is no `GET /v1/generations`, so a run this session did not submit can
+  // only be reached by its id. The document tab has a catalogue instead, because
+  // documents are the durable thing and DocKtizo lists those.
   if (!generationId) {
     return (
       <Section title="watch a generation">
@@ -71,6 +77,7 @@ export function Generation() {
 }
 
 function Watch({ generationId }: { generationId: string }) {
+  const open = useWorkbench((state) => state.open);
   const [status, setStatus] = useState<GenerationStatus | null>(null);
   const [events, setEvents] = useState<GenerationEvent[]>([]);
   const [checkpoint, setCheckpoint] = useState<string | null>(null);
@@ -78,7 +85,13 @@ function Watch({ generationId }: { generationId: string }) {
   const [artifacts, setArtifacts] = useState<ArtifactMetadata[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const terminal = status != null && isTerminal(status.state);
+  // Two different questions, and DocKtizo publishes a set for each. `resting`
+  // is "the run is no longer advancing", which is when the artifacts are all
+  // there; `terminal` is "nothing more can happen", which is the only thing
+  // cancellation cares about. `awaiting_review` is the state that separates
+  // them — resting, artifacts written, and still cancellable.
+  const resting = status != null && isIn(RESTING, status.state);
+  const terminal = status != null && isIn(TERMINAL, status.state);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -105,6 +118,11 @@ function Watch({ generationId }: { generationId: string }) {
 
         const final = await docktizo.generations.get(generationId);
         setStatus(final);
+        // The run is over; the document outlives it. Handing the id over here
+        // means the review, revision and migration tab is already loaded by the
+        // time anyone looks at it, and a run that produced no document — a
+        // failure, a cancellation — silently hands over nothing.
+        if (final.document_id) open(final.document_id);
         setArtifacts(await Promise.all(final.artifact_ids.map((id) => docktizo.artifacts.get(id))));
       } catch (cause) {
         // An abort is an unmount, not a failure.
@@ -124,10 +142,11 @@ function Watch({ generationId }: { generationId: string }) {
   return (
     <>
       <Section title="state" hint={generationId}>
-        <div className="panel mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="panel mb-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
           <Stat label="workflow" value={status.workflow_id} />
           <Stat label="stage" value={status.stage ?? '—'} />
           <Stat label="attempts" value={status.attempt_count} />
+          <Stat label="document" value={status.document_id ? 'in the document tab' : '—'} />
           <div className="flex flex-col gap-0.5">
             <span className="micro-label">status</span>
             {status.state === 'completed' ? (
@@ -199,30 +218,10 @@ function Watch({ generationId }: { generationId: string }) {
       </Section>
 
       <Section title="artifacts" hint={`${status.artifact_ids.length} produced`}>
-        {artifacts.length === 0 ? (
-          <Missing>
-            {terminal ? 'none' : 'artifacts appear once the generation reaches a terminal state'}
-          </Missing>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {artifacts.map((artifact) => (
-              <Disclosure
-                key={artifact.artifact_id}
-                label={artifact.output_format}
-                hint={`${artifact.file_name} · ${artifact.size_bytes} bytes`}
-              >
-                {/* A plain link. The proxy holds the bearer, so the browser can
-                    fetch this the way it fetches anything else. */}
-                <a className="btn-accent" href={artifactDownloadUrl(artifact.artifact_id)} download>
-                  download
-                </a>
-                <div className="mt-2">
-                  <Json value={artifact} maxHeight="14rem" />
-                </div>
-              </Disclosure>
-            ))}
-          </div>
-        )}
+        <Artifacts
+          artifacts={artifacts}
+          empty={resting ? 'none' : 'artifacts appear once the run stops advancing'}
+        />
       </Section>
     </>
   );

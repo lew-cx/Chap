@@ -14,14 +14,22 @@ Each open entry states what Chap needs, what is missing, a proposed shape, and
 a probe in `npm run proof:dk` that flips from `gap` to `FIXD` when DocKtizo gains
 the capability, which is how we learn a workaround can be deleted.
 
-Verified against DocKtizo `0.1.0a0` (`0018_worker_presence`) on 2026-08-10.
+Verified against DocKtizo `0.1.0a0` (`0021_workflow_version_migrations`) on
+2026-08-24.
 
 ```
-  2 passed · 0 failed · 0 gaps confirmed · 6 gaps fixed upstream
+  6 passed · 0 failed · 0 gaps confirmed · 8 gaps fixed upstream
 ```
 
-**Nothing is open.** All six entries this document opened on 2026-08-09 were
-closed within a day, and each one is recorded below with what Chap deleted.
+**Nothing is open, again.** DocKtizo grew a second half between `0018` and
+`0021` — `executive_memo.v1`, `proposal.v1`, a genuinely different
+`status_report.v2`, and explicit workflow-version migration — and reaching all of
+it opened two gaps. Both were the same shape: DocKtizo knew an answer, used it
+internally, and published no way to ask for it. Both were closed within hours,
+and this time both **returned lines** rather than costing them.
+
+All eight entries this document has opened are closed, and each is recorded below
+with what Chap deleted.
 
 Two of them — D5 and D6, including the one this document called "the most
 serious" — were already fixed at DocKtizo's HEAD when they were filed. Chap had
@@ -32,7 +40,8 @@ that would have caught it is the same probe that now proves the fix.
 The interesting result is that **closing all six made the module bigger, not
 smaller** — 788 lines to 882. The workarounds did shrink; what grew was
 everything the fixes made possible. See the note at the end, because it
-complicates this project's usual argument and is the more honest finding.
+complicates this project's usual argument and is the more honest finding. The
+same thing happened again in this pass, at four times the size.
 
 ---
 
@@ -55,6 +64,8 @@ None.
 | **D6** | A generate tab that would happily submit a request that could not succeed, and a failure arriving several stages later with a code describing the symptom. | Submit-time rejection with `provider_capability_missing` and `missing_capabilities` — the option this document argued for — plus per-workflow coverage in the readiness report. Chap now warns *before* the button, through the same `CapabilityNotice` it uses for LewLM. That component was already there; it just finally had something to read. |
 | — | `issue_count: N` and no indication of which N. | Index-aligned `issue_locations` and `issue_codes`, values and human messages deliberately withheld. The generate tab renders them as a two-column table: field, problem. Submitting a status report with only `project_name` now says `reporting_period missing · reporting_date missing · facts missing` instead of "3". |
 | — | A second way to read the same log. Chap's client had both a paged `events()` and the stream. | Just the stream. The two are interchangeable by design, so keeping both was Chap storing a choice nobody makes. |
+| **D7** | The migrate panel's target chooser, which offered *every other installed version of the same document type* — a superset — because the registered source-to-target pairs were not published. It could present a migration that could not happen, and the user found out from a `422 unsupported_workflow_migration` after choosing. `npm run proof:dk` carried the same guess as a loop that submitted previews until one was not refused. | `migration_targets` on `DocumentTypeResponse`, which is `WorkflowMigrationRegistry.targets_for()` — the table DocKtizo was already consulting. The chooser reads it, the proof reads it, and a published target the preview then refuses is now a **failure** rather than a skipped candidate, because the two disagreeing is worth knowing. |
+| **D8** | The document tab's opening screen: a box asking you to paste a `document_id`. Reloading the page made the work unreachable unless the id had been written down. | `GET /v1/documents`, cursor-paged and workspace-scoped. The tab opens on a catalogue — title, workflow, revision, review state — and a row is the way in. The proof also stopped depending on a working model: its lifecycle section can now prove against any document the workspace already holds rather than only one it just made. |
 
 ---
 
@@ -84,6 +95,80 @@ return lines. Sometimes it returns *capability*, and the line count goes up whil
 the amount of guessing goes down. The count of things Chap has to know that its
 upstream will not tell it — which is what these documents actually measure — went
 from six to zero.
+
+---
+
+### It happened again, at four times the size
+
+`packages/module-docktizo` is now 1,521 lines, and the budget moved 950 → 1,550
+to hold it. No gap forced any of it.
+
+Between `0018_worker_presence` and `0021_workflow_version_migrations`, DocKtizo
+grew a second half: `executive_memo.v1`, `proposal.v1`, a `status_report.v2`
+whose contract is genuinely different from v1's, and explicit workflow-version
+migration. The module's covered surface went from 12 of DocKtizo's operations to
+23 of 31. Line count roughly doubled; so did reach. Per DocKtizo operation the
+module went from 78 lines to 66 — it got *cheaper* per unit of upstream it
+fronts, which is the only per-unit direction this project treats as a good sign.
+
+What the new lines are:
+
+- **the document, not the run.** A generation is one execution; a document is the
+  durable thing with a head revision, a review state and a version history. The
+  module used to stop at the run, which is why `awaiting_review` was a wall — the
+  stepper reached it and nothing could act on it.
+- **review.** Approve, reject, request changes, with the decision history. The
+  buttons stay live in every state because DocKtizo owns the transition table and
+  answers an illegal decision with `invalid_approval_transition`; greying them out
+  would be Chap restating that table and being wrong about it eventually.
+- **revision.** Targeted (name the fields, hand the workflow instructions) and
+  manual override (supply the values, run no model). Both are new immutable
+  revisions through the same durable executor, so both come back as a generation
+  to watch.
+- **migration.** The preview is the feature: DocKtizo maps the document under the
+  target version, validates the candidate against that version's complete rules,
+  writes nothing, and reports every consequence as a coded notice.
+  `required_acknowledgements` is rendered as checkboxes exactly as it arrives.
+
+Three things got *smaller* in the same pass, and all three are the same move —
+stop restating something DocKtizo already says:
+
+| What went | Why |
+|---|---|
+| The document-type discovery fallback in the generate tab, and its own copy of the catalogue | The workflow is standing context for the whole screen now that four are installed, so it is one picker in the header and one read in the store. |
+| `artifactDownloadUrl(id)`, which assembled `/v1/artifacts/{id}/download` | `ArtifactResponse.download_url` is that path. It was the only route in the module Chap built by hand from a shape it had agreed to elsewhere. |
+| A regex splitting `status_report.v2` into `status_report` and a version | `DocumentResponse.document_type` is the family. Chap was parsing an identifier grammar that is published as two fields. |
+
+And one correctness fix that came out of reading the contract properly: the
+generation tab treated `TERMINAL` as "the run is over". It is not — `RESTING`
+is. `awaiting_review` is resting and cancellable at the same time, and it is the
+only state where those differ.
+
+---
+
+### The second time, the number came back down
+
+D7 and D8 were closed within hours of being filed. The module is 1,521 lines
+against 1,550 of budget and covers one more DocKtizo operation than it did before
+the fixes landed.
+
+| | Deleted | Added |
+|---|---|---|
+| D7 | the superset-and-refusal chooser, and the proof's preview loop | one field read |
+| D8 | the paste-an-id screen | a catalogue, which is bigger than what it replaced |
+
+So the ledger is mixed, which is the honest way to report it: one fix shrank the
+code, the other grew it, and the net is roughly flat. What is not flat is the
+guessing. The chooser can no longer offer a migration that will be refused, and
+the tab can no longer be a dead end after a page reload.
+
+One thing came out that neither gap asked for: `Adopt`, a shared component for
+"paste an id this session did not create", had two callers and now has one, so it
+was inlined back into the generation tab. A shared abstraction with one caller is
+a layer, not reuse. The generation tab keeps the box because there is no
+`GET /v1/generations` — and that is not filed as a gap, because a generation is a
+run and the run is not the durable thing. The document is, and DocKtizo lists
+those now.
 
 ---
 
@@ -124,46 +209,63 @@ file was faster than a repair.
 back is a 422 — one that now tells you which field, which is how this stopped
 being a five-minute problem.
 
-**`structured_generation_failed` on this host is LewLM crashing, not a weak
-model.** This note previously said the local model was not good enough to produce
-a valid status report. That was wrong, and the way it was wrong is worth keeping.
+**`structured_generation_failed` has meant three different things on this host,
+and none of them was a weak model.** This note is kept in full because the way it
+was wrong each time is the useful part.
 
-What is actually true:
+It first blamed model quality. Then G30 — LewLM dying mid-request compiling
+`StatusReportSpec`'s seven `maxLength: 5000` fields into a GBNF grammar
+llama.cpp's parser refused. G30 was fixed in LewLM on 2026-08-11 and that
+diagnosis was correct for that build.
 
-- This host has two GGUF models on llama.cpp, and
-  `/v1/models/{id}/capabilities` reports `json_schema` with
-  `enforcement: decode_time`, `decoder_enforced: true`, `fallback_used: false`.
-  Given a small schema, `gemma-4-e4b-hauhau-agg-q8-k-p` returns valid,
-  schema-conforming JSON on the first try.
-- With no `DOCKTIZO_LEWLM_MODEL` pinned, LewLM routes to an MLX model, where
-  structured output is prompt-guided only. It returns prose, DocKtizo rejects it,
-  and the error is `structured_generation_failed` with `retryable: false`.
-- With the GGUF model pinned, DocKtizo spends ~25 seconds in `generating` doing
-  real grammar-constrained work and then fails with `retryable: true` — because
-  **LewLM dies mid-request**. `StatusReportSpec` has seven string fields at
-  `maxLength: 5000`, and LewLM compiles each into one nested GBNF rule per
-  permitted character until llama.cpp's grammar parser refuses and the process
-  exits. One property at `maxLength: 2000` is enough. See
-  `docs/lewlm-gaps.md`, **G30**.
+On `0.4.2` the same error code means something new, and it is
+`docs/lewlm-gaps.md` **G31**. LewLM records no `context_length` for either
+converted GGUF bundle and refuses any request it estimates at 4,096 tokens or
+more. DocKtizo's default `DOCKTIZO_LEWLM_STRUCTURED_MAX_OUTPUT_TOKENS` is 4,096,
+so the ceiling is spent before a prompt is written and **every** structured
+generation is refused with a `400 routing_error` — which DocKtizo faithfully
+reports as `structured_generation_failed`, retryable or not depending on where in
+the pipeline it lands. Lowering the bound is what makes generation work at all:
 
-So the blocker is upstream of DocKtizo and upstream of the model, and neither of
-the two things this note originally blamed was responsible. The lesson is the
-one this repo keeps relearning: `retryable: true` was the tell, and it was there
-in the first run.
+```
+DOCKTIZO_LEWLM_STRUCTURED_MAX_OUTPUT_TOKENS=768
+DOCKTIZO_LEWLM_TIMEOUT_SECONDS=300   # grammar-constrained work takes ~35s here
+```
 
-**No artifact has been rendered end to end on this host yet.** Everything up to
-the model's output is verified: submit, idempotent replay, the 409 on a changed
-body, the worker claiming the row, the state machine advancing through six event
-types, the event stream with resumable cursors, cancellation, and typed terminal
-errors. Only the render and the download link are unexercised, and the reason is
-now a numbered LewLM gap with a one-line reproducer rather than a shrug about
-model quality.
+The 768 matters twice. The repair stage re-sends the prompt *plus* the rejected
+candidate and its issues, so a value that fits the first attempt can still refuse
+the second — which is exactly what happened at 2,048, and it looked like a
+different bug.
 
-**G30 was fixed in LewLM on 2026-08-11**, which removes that blocker: a schema
-shaped like `StatusReportSpec` — seven fields at `maxLength: 5000` — compiles to
-a grammar llama.cpp accepts, and a bound too large for a grammar parser comes
-back named in `structured_output.grammar_relaxations` and validated after
-generation rather than killing the server. Nothing here has been re-run since, so
-this note describes the last run and not the next one: `npm run proof:dk` with
-the GGUF model pinned is what turns the paragraph above into a rendered artifact
-or into the next real finding.
+Three diagnoses, three builds, and the constant is that the tell was in the first
+run each time and the error code named the symptom rather than the cause.
+
+**An artifact now renders end to end on this host.** `npm run proof:dk` submits a
+`status_report.v1`, follows the event stream to `awaiting_review`, and the
+document tab downloads the rendered `.docx` through the proxy. Approving it
+through the UI moves the review state to `approved` and the execution state to
+`completed`; approving it a second time comes back
+`409 invalid_approval_transition — revision is not awaiting a review decision`,
+rendered verbatim. The migration preview reports policy
+`status_report.v1-to-v2.1.0` with one acknowledgement required, and an
+unacknowledged submit is refused `422 migration_acknowledgement_required`.
+
+A migration completes end to end, and getting there took the module's own
+manual-override path. The first run's spec carried only the four required fields,
+so the v2 candidate failed v2's `schema_too_short` rule — the preview reported
+`candidate_valid: false` and the submit was refused
+`422 invalid_migration_candidate`, both of which is the contract working. Adding
+milestones, risks and a decision through `revisions/manual-override` produced a
+v1 revision the mapping could judge, and the migration went through:
+
+```
+1  generated        status_report.v1  completed        approved
+2  manual_override  status_report.v1  awaiting_review  awaiting_review
+3  migration        status_report.v2  awaiting_review  awaiting_review   head
+   from status_report.v1 by policy status_report.v1-to-v2.1.0
+```
+
+`WORKFLOW_MIGRATION_APPLIED` is emitted, the document head moves to
+`workflow_version: 2`, revision 1 is still v1 and still approved, and revision 3
+renders its own artifact through the v2 default template. Every screen above was
+driven through Chap rather than curl.

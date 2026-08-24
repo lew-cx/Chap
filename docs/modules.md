@@ -121,8 +121,9 @@ interface WebModule {
 ```
 
 Both exist because modules genuinely differ in size. `module-collections` is one
-Lab tab. `module-docktizo` fronts a different service with sources, generations
-and artifacts, and takes a nav entry of its own.
+Lab tab. `module-docktizo` fronts a different service — sources, generations,
+documents, review, revisions, migrations and artifacts — and takes a nav entry of
+its own with five tabs inside it.
 
 A module reuses core's `Screen` frame rather than inventing a second one. It
 should look like the application it was installed into.
@@ -134,10 +135,10 @@ and counts its `.ts` and `.tsx`, excluding `generated/` and tests. The script
 names no package.
 
 ```
-    646  lewlm              (budget 900)
+    661  lewlm              (budget 900)
     478  module-collections (budget 500)
-    936  module-docktizo    (budget 950)
-   2060  everything Chap hand-wrote
+   1521  module-docktizo    (budget 1550)
+   2660  everything Chap hand-wrote
 ```
 
 The split is the interesting part, and watching it move is the point. When
@@ -147,6 +148,14 @@ copy of DocKtizo's state machine to make up for it. All six gaps closed within a
 day. The state machine is generated now, the poll loop is a stream read with
 `readSSE` from `@chap/lewlm`, and the module is **larger** — because each fix
 made a feature cheap that had not been possible at all.
+
+It has since roughly doubled again, 950 → 1,550, and again no gap forced it.
+DocKtizo grew a document lifecycle — review, revisions, and explicit
+workflow-version migration — and the module's covered surface went from 12 of its
+operations to 23 of 31 — 78 lines per operation before, 66 after. That is the
+number this split exists to expose: a budget that rose because the module now
+fronts twice as much upstream reads very differently from one that rose because
+the upstream made it work twice as hard.
 
 A budget that only ever goes down would be measuring effort, not contract. This
 one measures both, which is why raising it needs an argument recorded in a gaps

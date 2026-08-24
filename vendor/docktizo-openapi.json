@@ -574,6 +574,8 @@
           "revision_requested",
           "revision_created",
           "manual_override_submitted",
+          "workflow_migration_previewed",
+          "workflow_migration_submitted",
           "approval_decided",
           "cancellation_requested",
           "cancellation_acknowledged",
@@ -867,6 +869,8 @@
           "artifacts:download",
           "revisions:create",
           "manual_overrides:create",
+          "migrations:read",
+          "migrations:create",
           "approvals:read",
           "approvals:create",
           "recovery:read",
@@ -964,6 +968,40 @@
           "required_for_core"
         ],
         "title": "ComponentReadiness",
+        "type": "object"
+      },
+      "DocumentListResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "has_more"
+        ],
+        "title": "DocumentListResponse",
         "type": "object"
       },
       "DocumentResponse": {
@@ -1119,6 +1157,16 @@
             ],
             "title": "Input Schema"
           },
+          "migration_targets": {
+            "items": {
+              "maxLength": 80,
+              "minLength": 4,
+              "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+              "type": "string"
+            },
+            "title": "Migration Targets",
+            "type": "array"
+          },
           "required_capabilities": {
             "items": {
               "type": "string"
@@ -1191,6 +1239,7 @@
           "GENERATION_CANCELLED",
           "REVISION_CREATED",
           "MANUAL_OVERRIDE_CREATED",
+          "WORKFLOW_MIGRATION_APPLIED",
           "APPROVAL_REQUESTED",
           "REVISION_APPROVED",
           "CHANGES_REQUESTED",
@@ -1309,6 +1358,53 @@
               "project_name": "Apollo",
               "reporting_date": "2026-07-29",
               "reporting_period": "Week 30"
+            },
+            "output_formats": [
+              "docx",
+              "pdf"
+            ]
+          },
+          {
+            "document_type": "executive_memo.v1",
+            "input_data": {
+              "author": "Strategy office",
+              "facts": [
+                "The bounded pilot completed."
+              ],
+              "memo_date": "2026-08-21",
+              "purpose": "Support an executive funding decision.",
+              "recipients": [
+                "Executive team"
+              ],
+              "subject": "Platform investment"
+            },
+            "output_formats": [
+              "docx",
+              "pdf"
+            ]
+          },
+          {
+            "document_type": "proposal.v1",
+            "input_data": {
+              "approach_facts": [
+                "Use fixed section checkpoints"
+              ],
+              "call_to_action": "Approve a discovery workshop.",
+              "client_context": "Northwind needs generation that survives interruption.",
+              "client_name": "Northwind",
+              "facts": [
+                "Completed stages are retained durably."
+              ],
+              "problem_opportunity": "Interrupted work currently loses progress.",
+              "proposal_date": "2026-08-22",
+              "purpose": "Improve document operations.",
+              "risks": [
+                "Adoption delay"
+              ],
+              "scope_deliverables": [
+                "Durable proposal workflow"
+              ],
+              "title": "Durable operations proposal"
             },
             "output_formats": [
               "docx",
@@ -1888,6 +1984,59 @@
         "title": "ManualOverrideCreateRequest",
         "type": "object"
       },
+      "MigrationNoticeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledgement_required": {
+            "title": "Acknowledgement Required",
+            "type": "boolean"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/MigrationSeverity"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "path",
+          "acknowledgement_required"
+        ],
+        "title": "MigrationNoticeResponse",
+        "type": "object"
+      },
+      "MigrationSeverity": {
+        "description": "How much a caller has to care about one mapping consequence.",
+        "enum": [
+          "info",
+          "warning",
+          "loss"
+        ],
+        "title": "MigrationSeverity",
+        "type": "string"
+      },
       "OutputFormat": {
         "enum": [
           "text",
@@ -2087,7 +2236,8 @@
       "RevisionMode": {
         "enum": [
           "generated",
-          "manual_override"
+          "manual_override",
+          "migration"
         ],
         "title": "RevisionMode",
         "type": "string"
@@ -2156,6 +2306,18 @@
             "title": "Generation Id",
             "type": "string"
           },
+          "migration_policy_version": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Migration Policy Version"
+          },
           "output_formats": {
             "items": {
               "$ref": "#/components/schemas/OutputFormat"
@@ -2205,6 +2367,20 @@
             },
             "title": "Source Reference Ids",
             "type": "array"
+          },
+          "source_workflow_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 4,
+                "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Workflow Id"
           },
           "validation_report_id": {
             "maxLength": 128,
@@ -2294,6 +2470,18 @@
             "title": "Generation Id",
             "type": "string"
           },
+          "migration_policy_version": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Migration Policy Version"
+          },
           "output_formats": {
             "items": {
               "$ref": "#/components/schemas/OutputFormat"
@@ -2333,6 +2521,20 @@
             "minimum": 1.0,
             "title": "Revision Number",
             "type": "integer"
+          },
+          "source_workflow_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 4,
+                "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Workflow Id"
           },
           "workflow_id": {
             "maxLength": 80,
@@ -3041,6 +3243,202 @@
         "title": "WhoAmIResponse",
         "type": "object"
       },
+      "WorkflowMigrationCreateRequest": {
+        "additionalProperties": false,
+        "description": "An explicit request to move one document onto a new workflow version.\n\nNothing here is optional by accident: the caller states the version it is on,\nthe version it wants, which template the new version renders through, and\nwhich reported consequences it accepts.",
+        "properties": {
+          "acknowledged_notices": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Acknowledged Notices",
+            "type": "array"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          },
+          "parent_revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Parent Revision Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "source_workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Source Workflow Id",
+            "type": "string"
+          },
+          "target_template_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Template Id"
+          },
+          "target_workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Target Workflow Id",
+            "type": "string"
+          },
+          "use_target_default_template": {
+            "default": false,
+            "title": "Use Target Default Template",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "parent_revision_id",
+          "source_workflow_id",
+          "target_workflow_id",
+          "reason"
+        ],
+        "title": "WorkflowMigrationCreateRequest",
+        "type": "object"
+      },
+      "WorkflowMigrationPreviewResponse": {
+        "additionalProperties": false,
+        "description": "Everything a caller must see before a migration may be submitted.",
+        "properties": {
+          "candidate_spec_hash": {
+            "title": "Candidate Spec Hash",
+            "type": "string"
+          },
+          "candidate_valid": {
+            "title": "Candidate Valid",
+            "type": "boolean"
+          },
+          "document_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "loses_content": {
+            "title": "Loses Content",
+            "type": "boolean"
+          },
+          "migration_policy_version": {
+            "title": "Migration Policy Version",
+            "type": "string"
+          },
+          "notices": {
+            "items": {
+              "$ref": "#/components/schemas/MigrationNoticeResponse"
+            },
+            "title": "Notices",
+            "type": "array"
+          },
+          "parent_revision_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "title": "Parent Revision Id",
+            "type": "string"
+          },
+          "required_acknowledgements": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Acknowledgements",
+            "type": "array"
+          },
+          "source_template_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Template Id"
+          },
+          "source_workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Source Workflow Id",
+            "type": "string"
+          },
+          "target_template_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Template Id"
+          },
+          "target_template_policy": {
+            "title": "Target Template Policy",
+            "type": "string"
+          },
+          "target_workflow_id": {
+            "maxLength": 80,
+            "minLength": 4,
+            "pattern": "^[a-z][a-z0-9_]*\\.v[1-9][0-9]*$",
+            "title": "Target Workflow Id",
+            "type": "string"
+          },
+          "validation_issue_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Validation Issue Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "document_id",
+          "parent_revision_id",
+          "source_workflow_id",
+          "target_workflow_id",
+          "migration_policy_version",
+          "notices",
+          "required_acknowledgements",
+          "loses_content",
+          "candidate_valid",
+          "validation_issue_codes",
+          "candidate_spec_hash",
+          "source_template_id",
+          "target_template_id",
+          "target_template_policy"
+        ],
+        "title": "WorkflowMigrationPreviewResponse",
+        "type": "object"
+      },
       "WorkflowReadiness": {
         "additionalProperties": false,
         "properties": {
@@ -3443,6 +3841,75 @@
         ]
       }
     },
+    "/v1/documents": {
+      "get": {
+        "operationId": "list_documents_v1_documents_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Documents",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
     "/v1/documents/{document_id}": {
       "get": {
         "operationId": "get_document_v1_documents__document_id__get",
@@ -3485,6 +3952,143 @@
           }
         ],
         "summary": "Get Document",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/documents/{document_id}/migrations": {
+      "post": {
+        "operationId": "create_document_migration_v1_documents__document_id__migrations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowMigrationCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationAcceptedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Document Migration",
+        "tags": [
+          "documents",
+          "revisions",
+          "artifacts"
+        ]
+      }
+    },
+    "/v1/documents/{document_id}/migrations/preview": {
+      "post": {
+        "description": "Report what a version change would do, without changing anything.\n\nA caller cannot acknowledge consequences it has not been shown, so the\nsubmit route refuses until the codes reported here are echoed back.",
+        "operationId": "preview_document_migration_v1_documents__document_id__migrations_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowMigrationCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowMigrationPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Document Migration",
         "tags": [
           "documents",
           "revisions",

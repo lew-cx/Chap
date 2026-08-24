@@ -3,13 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "DocKtizo as a Chap module: sources, generations, revisions and artifacts.",
+  "description": "DocKtizo as a Chap module: sources, generations, documents, review, revisions, migrations and artifacts.",
   "exports": {
     "./server": "./src/server.ts",
     "./web": "./src/web.tsx"
   },
   "chap": {
-    "budget": 950
+    "budget": 1550
   },
   "dependencies": {}
 }

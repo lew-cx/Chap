@@ -12,12 +12,18 @@
  * This runs against DocKtizo directly, not through Chap's proxy, so a failure
  * here is never a Chap bug. Two exceptions are marked in place.
  *
+ * The second half proves the document lifecycle — the half of DocKtizo the
+ * module reached for the first time in this pass. It rides on the single
+ * generation D3 already submits rather than paying for a second model run, and
+ * says so plainly when no generation on this host reaches a document.
+ *
  * Usage:
  *   npx tsx packages/module-docktizo/proof.ts [--base http://127.0.0.1:8090] [--token …]
  */
 
 import { readSSE } from '../lewlm/src/index.ts';
 import { check, flag, gap, record, summarize } from '../../scripts/probe.ts';
+import { RESTING } from './src/generated/contract.ts';
 import { DOCKTIZO_CONTRACT } from './src/generated/meta.ts';
 
 const BASE = flag('base', 'http://127.0.0.1:8090');
@@ -40,6 +46,9 @@ async function main() {
   console.log(`\ndocktizo proof  ->  ${BASE}\n`);
 
   let authed = false;
+  // D3 submits one real generation. The lifecycle section below rides on it
+  // rather than paying for a second model run.
+  let generationId: string | null = null;
 
   await check('healthz', async () => {
     const res = await get('/healthz');
@@ -116,6 +125,7 @@ async function main() {
       return `could not submit a generation to stream (${submitted.status} ${envelope.error?.code ?? ''})`;
     }
     const { generation_id: id } = (await body(submitted)) as { generation_id: string };
+    generationId = id;
 
     const res = await fetch(`${BASE}/v1/generations/${id}/events/stream`, {
       headers: { ...headers, accept: 'text/event-stream' },
@@ -192,11 +202,182 @@ async function main() {
     return null;
   });
 
+  await gap('D7', 'the registered migration pairs are not published', async () => {
+    if (!authed) return 'not verifiable without a working token';
+    // DocKtizo registers migrations as exact source-to-target pairs and its
+    // registry has always been able to answer `targets_for(source)`. Nothing
+    // published it, so a client offering "migrate this document" had to guess a
+    // target and read the refusal. `migration_targets` is that answer.
+    const types = (await body(await get('/v1/document-types'))) as {
+      items?: Record<string, unknown>[];
+    };
+    const items = types.items ?? [];
+    if (items.length === 0) return 'no document types installed; not verifiable here';
+    if (!items.every((item) => Array.isArray(item['migration_targets']))) {
+      return 'document-types names no target a document may migrate onto';
+    }
+    return null;
+  });
+
+  await gap('D8', 'a workspace\'s documents cannot be listed', async () => {
+    if (!authed) return 'not verifiable without a working token';
+    // A document used to be reachable only through an id something else had just
+    // handed over. Keeping a local list would have been Chap holding a second,
+    // worse copy of a record DocKtizo owns, so the tab asked you to paste one.
+    const res = await get('/v1/documents?limit=1');
+    if (!res.ok) return `GET /v1/documents -> ${res.status}`;
+    const page = (await body(res)) as { items?: unknown[]; has_more?: boolean; next_cursor?: unknown };
+    if (!Array.isArray(page.items) || page.has_more === undefined) {
+      return 'GET /v1/documents answers, but not as a cursor-paged list';
+    }
+    return null;
+  });
+
+  // --- the document lifecycle ---------------------------------------------
+
   if (!authed) {
-    record('SKIP', 'generation round trip', 'no working token — pass --token or configure DOCKTIZO_AUTH_*');
+    record('SKIP', 'document lifecycle', 'no working token — pass --token or configure DOCKTIZO_AUTH_*');
+    summarize();
   }
 
+  // The document to prove against: the one D3's generation produced, or failing
+  // that any the workspace already holds. The second half of that is new — until
+  // `GET /v1/documents` existed a proof could only use a document it had just
+  // made, which tied the whole lifecycle section to a working model.
+  const documentId = (await settle(generationId)) ?? (await anyDocument());
+  if (!documentId) {
+    record('SKIP', 'document lifecycle', 'no generation reached a document, and the workspace holds none');
+    summarize();
+  }
+
+  await check('document', async () => {
+    const document = (await body(await get(`/v1/documents/${documentId}`))) as {
+      workflow_id?: string;
+      current_revision_number?: number;
+      approval?: { state?: string };
+    };
+    return `${document.workflow_id} revision ${document.current_revision_number} · ${document.approval?.state}`;
+  });
+
+  await check('revision history', async () => {
+    const page = (await body(await get(`/v1/documents/${documentId}/revisions?limit=50`))) as {
+      items?: { revision_id: string; revision_mode: string }[];
+    };
+    const items = page.items ?? [];
+    if (items.length === 0) throw new Error('a document exists with no revisions');
+    // The approvals read is a separate authorization action from the revision
+    // read, and a token missing it fails here rather than on the review screen.
+    const approvals = await get(`/v1/revisions/${items[0]!.revision_id}/approvals`);
+    if (!approvals.ok) throw new Error(`approvals -> ${approvals.status}`);
+    return items.map((item) => item.revision_mode).join(', ');
+  });
+
+  // Which version this document may move onto, read rather than guessed. This
+  // used to be a loop over every other installed version of the same document
+  // type, submitting previews until one was not refused; `migration_targets` is
+  // the registered set, so there is nothing left to try.
+  const document = (await body(await get(`/v1/documents/${documentId}`))) as {
+    workflow_id: string;
+    document_type: string;
+    current_revision_id: string;
+  };
+  const catalogue = (await body(await get('/v1/document-types'))) as {
+    items?: { workflow_id: string; migration_targets?: string[] }[];
+  };
+  const migration = (target: string, extra: Record<string, unknown> = {}) => ({
+    parent_revision_id: document.current_revision_id,
+    source_workflow_id: document.workflow_id,
+    target_workflow_id: target,
+    use_target_default_template: true,
+    reason: 'chap proof',
+    ...extra,
+  });
+
+  let migratesOnto: string | null = null;
+
+  await check('migration preview', async () => {
+    const targets =
+      (catalogue.items ?? []).find((item) => item.workflow_id === document.workflow_id)
+        ?.migration_targets ?? [];
+    if (targets.length === 0) return `no registered migration from ${document.workflow_id}`;
+
+    const target = targets[0]!;
+    const res = await get(`/v1/documents/${documentId}/migrations/preview`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(migration(target)),
+    });
+    // A published target that the preview refuses would mean the two disagree,
+    // which is worth failing on rather than skipping past.
+    if (!res.ok) {
+      const envelope = (await body(res)) as { error?: { code?: string } };
+      throw new Error(`${document.workflow_id} -> ${target} is published but refused: ${envelope.error?.code}`);
+    }
+    const preview = (await body(res)) as {
+      migration_policy_version?: string;
+      required_acknowledgements?: string[];
+      candidate_valid?: boolean;
+    };
+    if (!preview.migration_policy_version) throw new Error('a preview named no policy version');
+    migratesOnto = target;
+    return (
+      `${document.workflow_id} -> ${target} by ${preview.migration_policy_version} · ` +
+      `${(preview.required_acknowledgements ?? []).length} to acknowledge · ` +
+      `candidate ${preview.candidate_valid ? 'valid' : 'invalid'}`
+    );
+  });
+
+  await check('unacknowledged migration is refused', async () => {
+    if (!migratesOnto) return 'nothing to migrate onto';
+    // The submit half, proven without spending a worker run: a migration whose
+    // reported consequences are not acknowledged must never be accepted. This is
+    // the rule the acknowledgement checkboxes exist to satisfy, checked at the
+    // source rather than in the browser.
+    const res = await get(`/v1/documents/${documentId}/migrations`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': `proof-migration-${Date.now()}` },
+      body: JSON.stringify(migration(migratesOnto, { acknowledged_notices: [] })),
+    });
+    if (res.ok) throw new Error('an unacknowledged migration was accepted');
+    const envelope = (await body(res)) as { error?: { code?: string } };
+    return `${res.status} ${envelope.error?.code ?? ''}`;
+  });
+
   summarize();
+}
+
+/** Any document this workspace already holds. Newest first, so the freshest wins. */
+async function anyDocument(): Promise<string | null> {
+  const res = await get('/v1/documents?limit=1');
+  if (!res.ok) return null;
+  const page = (await body(res)) as { items?: { document_id?: string }[] };
+  return page.items?.[0]?.document_id ?? null;
+}
+
+/**
+ * Wait for a generation to produce a document, or report that it did not.
+ *
+ * `awaiting_review` is the interesting stop: the run is over, the artifacts are
+ * written, and the document is the thing everything after this proves against.
+ */
+async function settle(generationId: string | null): Promise<string | null> {
+  if (!generationId) return null;
+  const deadline = Date.now() + 180_000;
+
+  while (Date.now() < deadline) {
+    const status = (await body(await get(`/v1/generations/${generationId}`))) as {
+      state?: string;
+      document_id?: string | null;
+      error?: { code?: string };
+    };
+    if (status.document_id) return status.document_id;
+    if (status.state && RESTING.includes(status.state)) {
+      record('SKIP', 'generation reached no document', `${status.state} ${status.error?.code ?? ''}`);
+      return null;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+  }
+  return null;
 }
 
 main().catch((error) => {

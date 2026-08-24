@@ -7,18 +7,28 @@
  * DocKtizo said, not what Chap guessed it meant.
  *
  * Everything goes through `/dk`, which chap-server proxies while injecting the
- * bearer token. No credential reaches this bundle, which is also why
- * `artifactDownloadUrl` can be a plain string handed to `<a download>`.
+ * bearer token. No credential reaches this bundle, which is also why an
+ * artifact download can be a plain string handed to `<a download>`.
  */
 
 import type {
+  ApprovalDecision,
+  ApprovalHistory,
   ArtifactMetadata,
-  DocumentTypeDetail,
+  DocumentDetail,
+  DocumentList,
+  DocumentTypeList,
   GenerationAccepted,
   GenerationCancellation,
   GenerationRequest,
   GenerationStatus,
+  ManualOverrideRequest,
+  MigrationPreview,
+  MigrationRequest,
   ReadinessReport,
+  RevisionDetail,
+  RevisionList,
+  RevisionRequest,
   SourceSummary,
   TemplateList,
   Whoami,
@@ -104,13 +114,29 @@ const json = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
+/**
+ * A POST DocKtizo will replay rather than repeat.
+ *
+ * Every write below is idempotent on a caller-supplied key: same key and same
+ * body replays the original outcome with `replayed: true`, same key and a
+ * different body is a 409 `idempotency_conflict`. A review decision, a revision
+ * and a migration are all things a double-click must not do twice, so the key
+ * is a required argument rather than an option.
+ */
+const idempotent = (body: unknown, key: string): RequestInit => ({
+  ...json(body),
+  headers: { 'content-type': 'application/json', 'idempotency-key': key },
+});
+
 export const docktizo = {
   /** Which workspace the token resolved to, and what it may do. */
   whoami: () => call<Whoami>('/whoami'),
 
   documentTypes: {
-    list: () => call<{ count: number; items: DocumentTypeDetail[] }>('/document-types'),
-    get: (id: string) => call<DocumentTypeDetail>(`/document-types/${encodeURIComponent(id)}`),
+    // No `get`. `GET /v1/document-types` returns each entry in full — schema,
+    // capabilities, templates and all — so the per-id route reads the same bytes
+    // one at a time. Same reasoning as the paged event reader below.
+    list: () => call<DocumentTypeList>('/document-types'),
   },
 
   sources: {
@@ -144,10 +170,7 @@ export const docktizo = {
      * `replayed: true`; same key and a different body is a 409.
      */
     create: (body: GenerationRequest, idempotencyKey: string) =>
-      call<GenerationAccepted>('/generations', {
-        ...json(body),
-        headers: { 'content-type': 'application/json', 'idempotency-key': idempotencyKey },
-      }),
+      call<GenerationAccepted>('/generations', idempotent(body, idempotencyKey)),
 
     get: (id: string) => call<GenerationStatus>(`/generations/${encodeURIComponent(id)}`),
 
@@ -178,6 +201,90 @@ export const docktizo = {
     },
   },
 
+  /**
+   * The document a generation produced, and everything you can do to it after.
+   *
+   * A generation is one run. The document is the durable thing: a head revision,
+   * a review state, and a version history that outlives every run that touched
+   * it. Chap used to stop at the run, which is why `awaiting_review` was a wall
+   * — the stepper reached it and nothing could act on it.
+   */
+  documents: {
+    /**
+     * The workspace's documents, newest first and cursor-paged.
+     *
+     * Chap reads one page. This route is new: until it existed a document was
+     * reachable only through an id something else had just handed over, and the
+     * tab below opened on a box asking you to paste one.
+     */
+    list: (limit = 50) => call<DocumentList>(`/documents?limit=${limit}`),
+
+    get: (id: string) => call<DocumentDetail>(`/documents/${encodeURIComponent(id)}`),
+
+    /**
+     * The version history, newest first and cursor-paged.
+     *
+     * Chap reads one page. A document accumulates revisions at human speed, and
+     * a "load more" that has never had anything to load is a control Chap would
+     * be maintaining on speculation.
+     */
+    revisions: (id: string, limit = 50) =>
+      call<RevisionList>(`/documents/${encodeURIComponent(id)}/revisions?limit=${limit}`),
+
+    /** A targeted revision: named fields, re-generated under instructions. */
+    revise: (id: string, body: RevisionRequest, key: string) =>
+      call<GenerationAccepted>(`/documents/${encodeURIComponent(id)}/revisions`, idempotent(body, key)),
+
+    /**
+     * A correction with no model in the loop — the values are the caller's.
+     *
+     * Still a new immutable revision, still validated and re-rendered under the
+     * workflow's own rules; only the content is supplied rather than generated.
+     */
+    override: (id: string, body: ManualOverrideRequest, key: string) =>
+      call<GenerationAccepted>(
+        `/documents/${encodeURIComponent(id)}/revisions/manual-override`,
+        idempotent(body, key),
+      ),
+
+    migrations: {
+      /**
+       * What a version change would do, decided without writing anything.
+       *
+       * The preview runs the registered mapping, validates the candidate under
+       * the target version's complete rules, and reports every consequence as a
+       * coded notice. Nothing is guessed here and nothing is guessed in the UI:
+       * `required_acknowledgements` is the exact list the submit will demand.
+       */
+      preview: (id: string, body: MigrationRequest) =>
+        call<MigrationPreview>(`/documents/${encodeURIComponent(id)}/migrations/preview`, json(body)),
+
+      create: (id: string, body: MigrationRequest, key: string) =>
+        call<GenerationAccepted>(`/documents/${encodeURIComponent(id)}/migrations`, idempotent(body, key)),
+    },
+  },
+
+  revisions: {
+    get: (id: string) => call<RevisionDetail>(`/revisions/${encodeURIComponent(id)}`),
+
+    /** Every decision ever recorded against this revision, in order. */
+    approvals: (id: string) => call<ApprovalHistory>(`/revisions/${encodeURIComponent(id)}/approvals`),
+
+    /**
+     * Approve, reject, or send back for changes.
+     *
+     * Three routes rather than one with a field, so the decision is in the URL
+     * and cannot be smuggled past authorization in a body. The action name is
+     * DocKtizo's own path segment; naming it here would be Chap inventing a
+     * fourth vocabulary for the same three words.
+     */
+    decide: (id: string, action: 'approve' | 'reject' | 'request-changes', comment: string, key: string) =>
+      call<ApprovalDecision>(
+        `/revisions/${encodeURIComponent(id)}/${action}`,
+        idempotent({ comment: comment || null }, key),
+      ),
+  },
+
   artifacts: {
     get: (id: string) => call<ArtifactMetadata>(`/artifacts/${encodeURIComponent(id)}`),
   },
@@ -187,6 +294,9 @@ export const docktizo = {
  * A plain URL, not a blob. The proxy injects the bearer, so `<a download>` works
  * and the browser handles Content-Disposition — which is a whole feature Chap
  * never had to build.
+ *
+ * The path is DocKtizo's own `download_url`, not one Chap assembles. It is the
+ * only route in the module a response hands over ready-made, and taking it means
+ * one fewer place where Chap has to agree with DocKtizo about a URL shape.
  */
-export const artifactDownloadUrl = (id: string) =>
-  `${BASE}/artifacts/${encodeURIComponent(id)}/download`;
+export const downloadUrl = (artifact: ArtifactMetadata) => `/dk${artifact.download_url}`;
