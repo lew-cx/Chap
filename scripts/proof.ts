@@ -1064,6 +1064,62 @@ async function main() {
     return null;
   });
 
+  await gap('G31', 'a model with no published context length is capped at 4096', async () => {
+    /*
+     * `GET /v1/models` publishes `context_length` and used to leave it null for
+     * every converted GGUF bundle on this host, which the router turned into a
+     * hard refusal for any request it estimated at 4,096 tokens or more — prompt
+     * plus `max_tokens` — even though the runtime was loaded and the same model
+     * answered a request one token under the line.
+     *
+     * Two things close it, and this probe only passes when both hold: the length
+     * has to be recorded, and a request that would have been refused has to be
+     * answered. A model still reporting null is not fixed by a configurable
+     * ceiling, which is why the check below starts from the manifest.
+     */
+    const inventory = await client.request<ModelInventory>('GET', '/v1/models');
+    const runnable = new Set(chatCandidates);
+    const unpublished = inventory.items.filter(
+      (item) => runnable.has(item.model_id) && item.context_length == null,
+    );
+    if (unpublished.length === 0) return null;
+
+    const subject = unpublished[0]!.model_id;
+    // `raw` throws a typed error on any non-2xx, so the refusal has to be read
+    // out of the exception rather than off a status.
+    const ask = async (maxTokens: number) => {
+      try {
+        const res = await client.raw('POST', '/v1/chat/completions', {
+          json: { model: subject, messages: [{ role: 'user', content: 'hi' }], max_tokens: maxTokens },
+        });
+        return { status: res.status, code: 'ok', estimate: undefined as number | undefined };
+      } catch (error) {
+        if (!(error instanceof LewLMApiError)) throw error;
+        // The estimate is the only number that explains the refusal, and it is
+        // the one the message leaves out.
+        const estimate = error.details['estimated_context_tokens'];
+        return {
+          status: error.status,
+          code: error.code,
+          estimate: typeof estimate === 'number' ? estimate : undefined,
+        };
+      }
+    };
+
+    // The pair is the whole claim: same model, same prompt, refused only because
+    // of what it was allowed to write back.
+    const small = await ask(64);
+    if (small.status !== 200) return null;
+    const large = await ask(4_096);
+    if (large.status === 200) return null;
+
+    return (
+      `${subject} publishes no context_length; max_tokens 64 -> 200, ` +
+      `max_tokens 4096 -> ${large.status} ${large.code}` +
+      `${large.estimate ? ` at an estimated ${large.estimate} tokens` : ''}`
+    );
+  });
+
   // --- summary ------------------------------------------------------------
 
   summarize();

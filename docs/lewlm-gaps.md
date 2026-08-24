@@ -13,18 +13,32 @@ argument. Every entry has a probe in `npm run proof` that flips from `gap` to
 `FIXD` when LewLM gains the capability, which is how we learn a workaround can be
 deleted.
 
-Verified against LewLM `0.4.1a0` on 2026-08-10. G30 was fixed in LewLM on
-2026-08-11 and re-verified against a local server; the run below predates that
-fix.
+Verified against LewLM `0.4.2` on 2026-08-24, after `POST /v1/models/scan`.
 
 ```
-  23 passed · 0 failed · 3 gaps confirmed · 15 gaps fixed upstream
+  24 passed · 0 failed · 3 gaps confirmed · 17 gaps fixed upstream
 ```
 
-**Two gaps remain.** G13 is a subsystem — a ring buffer with `Last-Event-ID`
-semantics — and should not be designed off a P2 note. G29 is what G28 turned
-into: the streamed text is now correct, but on the MLX path it is not
-incremental.
+**G31 is closed, and G13 is half closed.** The two remaining `gap` lines are not
+contract gaps: G1 reports that this server was started without CORS, and G5 that
+the runtime Chap routed to honors none of the sampling controls it was sent — the
+contract reports both faithfully, which is the behaviour each asked for. G13 is
+the only entry still open.
+
+G31 lasted about two hours. `src/lewlm/registry/gguf_header.py` now reads
+`<arch>.context_length` out of the GGUF header, so a rescan moved both bundles
+from `null` to `131072` with `context_length_source: gguf_header`, and the
+request that used to be refused answers in 3.2 seconds. The fix went further than
+the gap asked: routing now scores against `runtime.serving_context_tokens()` —
+what the runtime will actually reserve, `16384` here — rather than the window the
+model advertises, and the ceiling for an unmeasured model is
+`LEWLM_UNKNOWN_CONTEXT_TOKEN_LIMIT` rather than a literal, named in the refusal.
+
+**G29 is closed.** The MLX path now streams incrementally, so the reply arrives
+in pieces rather than all at once and the composer's spoken replies get the head
+start they were built for. That was the last thing standing between "streaming is
+the transport" and "streaming is the experience"; nothing in Chap changed to
+collect it.
 
 G30 — the one that let any caller end the server with a single request — is
 closed. `npm run proof` no longer takes LewLM down, and no longer needs a
@@ -32,100 +46,61 @@ restart between runs: its probe now asserts that the request is *answered*. See
 **Closed** for what the crash actually was, including the part this document
 proposed that would not have worked.
 
-G28 was fixed the day it was filed. The fix was a prompt-formatting mismatch
-rather than anything in the decoder — the non-streaming path templated the
-messages through the backend and the streaming path did not, so the model saw no
-turn structure and continued raw text. All three entrypoints now build one
-prompt for one conversation, and both MLX bundles answer "Blue" on both paths.
+The three audio gaps this document opened on 2026-08-09 were closed within a day
+of being written, along with G24, G19 and G28, and each one deleted code from
+Chap. See **Closed** for what came out — that list is the actual argument of this
+project.
 
-The three audio gaps this document opened yesterday were closed within a day of
-being written, along with G24 and G19, and each one deleted code from Chap. See
-**Closed** for what came out — that list is the actual argument of this project.
-
-The second `gap` line in the proof run is G5, which is not a contract gap. The
-probe reports that the runtime Chap happened to route to honors none of the
-sampling controls it was sent; the contract reports that faithfully, which is the
-behaviour G5 asked for.
+The proof gained a check alongside G13's entry — `event stream narrows at the
+server` — because the filtering half is now something Chap depends on rather than
+something it works around, and a capability Chap depends on belongs in `check`,
+not in `gap`.
 
 ---
 
 ## Open
 
-### G29 · streamed text is correct but not incremental on the MLX runtime
+### G13 · `/v1/events` can be filtered, but not resumed
 
-G28's fix made the streamed answer right. It did not make it arrive in pieces.
-Same model, `max_tokens: 48`, counting the `token.delta` events:
+**Filtering landed.** `src/lewlm/events/filters.py` narrows at the bus, before an
+event is enqueued, so an excluded event is never queued, never serialized and
+never sent — a backpressure control rather than a convenience. The route takes
+`types`, `scope`, `request_id` and `model_id`, repeatable or comma-separated,
+with the type and scope vocabularies published as enums on the query parameters.
+Measured on a live `0.4.2`: a subscription asking for `request.accepted` and
+`request.completed` received exactly two frames across a chat completion, and no
+`token.delta`.
 
-```
-"Count to twenty."                 ->  13 deltas over 1.0s
-"Count slowly from one to fifty."  ->   1 delta  at the end
-"Write one sentence about the sea." -> 16 deltas over 0.6s
-```
+**What Chap deleted.** The events explorer filtered on arrival because it had to.
+Its type picker and its `hide token.delta` toggle are now sent to the server, so
+the flood does not cross the wire at all. The ring buffer, the ~10 Hz throttle
+and the virtualized list stay — but they stay because the telemetry rail's whole
+purpose is watching an unfiltered stream go past, which is now a *choice*. That
+is the difference between absorbing a contract limitation and deciding a
+behaviour.
 
-Deterministic and prompt-dependent: the middle row reproduces on every attempt,
-on both MLX bundles, and the one delta carries the entire reply. The llama.cpp
-model on this host emits one delta per token for all three. So this is the MLX
-path, and it is not about length — the collapsed reply is the *longest* of the
-three.
+**What is still missing: replay.** The frames carry no `id:`, so there is no
+cursor to resume from and `Last-Event-ID` has nothing to name even if the route
+read it. A reconnect still loses its window.
 
-The text is correct, which is why G28's probe passes and this needed its own.
-`stream: true` is being honoured as a transport and not as a behaviour:
-time-to-first-token equals time-to-last-token.
+**Proposed.** A server-side ring buffer, an `id:` on every frame, and
+`Last-Event-ID` replay from it. DocKtizo's generation stream is the shape: every
+frame's `id:` is the same cursor its paged reader accepts, so a client may drop,
+reconnect and resume exactly, or switch between the two readers without replaying
+or skipping.
 
-**Proposed.** Find what withholds the text — most likely a streaming detokenizer
-holding an unflushed segment until a boundary that this output never produces
-(the collapsed reply is `"One...\n\ntwo...\n\nthree..."`, newline-separated with
-no leading-space word boundaries, where the two that stream fine are
-space-separated). If that is it, the flush condition needs a length or
-end-of-generation escape rather than a boundary it may never see.
+**Cost, as built.** Chap cannot vouch for a continuous timeline across a
+reconnect, so it does not pretend to: `onStatus` fires `reconnected` and the
+store pushes an explicit **"events between the drop and now were lost"** marker
+into the stream. That marker is the entire workaround now, which is a much
+smaller thing than it was this morning.
 
-**Cost.** Three things Chap builds on incremental delivery degrade to nothing on
-these two models, silently, because the reply is correct when it lands:
-
-- **Spoken replies.** The composer's `speak` toggle cuts the reply into sentences
-  as tokens arrive and synthesizes each one when it closes, so audio starts about
-  a sentence in. With one delta the first sentence closes at the same moment as
-  the last, and the feature degrades to a plain turn-late read-aloud — the exact
-  latency it was built to avoid.
-- **Cancellation.** Nothing to abort mid-stream; the stream is over before the
-  first event. The abort probe was keyed to the third text delta and reported
-  cancellation broken when cancellation was fine — the probe now aborts on the
-  first event of any kind, which is what it always meant to test.
-- **Token rate.** `usage.measured` still reports, but a rate computed over a
-  single delta describes the transport, not the decode.
-
-**Also seen once, not reproduced.** During one full `npm run proof` the server
-aborted the whole process from llama.cpp's sampler:
-
-```
-llama-sampler.cpp:850: GGML_ASSERT(logits != nullptr) failed
-  llama_sampler_sample  <-  from a streaming generator
-```
-
-Repeated streaming on the llama.cpp model, and MLX/llama.cpp interleaved, did not
-reproduce it; a later identical proof run left the server healthy. Recorded
-because a `GGML_ASSERT` takes the process down rather than failing a request, so
-it is worth knowing about even unreproduced — but it is not a filed gap on this
-evidence.
-
----
-
-### G13 · `/v1/events` has no filtering, replay, or backpressure control
-
-`src/lewlm/api/routes/events.py` takes no query parameters and ignores
-`Last-Event-ID`.
-
-**Proposed.** `?types=`, `?scope=`, `?request_id=`, `?model_id=` filters, and
-`Last-Event-ID` replay from a server-side ring buffer.
-
-**Cost, as built.** The browser receives **every `token.delta` of every request**
-and filters client-side. Chap absorbs this with a 5,000-entry ring, a ~10 Hz
-throttled flush and a virtualized list — none of which would be needed at this
-size if the server could filter. A reconnect silently loses its window, so the
-event stream renders an explicit **"reconnected — events in this window were
-lost"** marker rather than presenting a continuous timeline it cannot vouch for.
-
-It is now the only gap left, and the only one that still costs Chap real code.
+**One ergonomic note, not a gap.** The filter names what it wants and has no
+negation, so "everything except `token.*`" has to be spelled as the other 53
+types. `EVENT_TYPES` is generated from the contract, so Chap's list is exact and
+cannot drift — but it does mean the common case produces a 53-value query string.
+An `exclude_types` would collapse it. Recorded rather than filed, because the
+capability is there and this is only its shape.
 
 ---
 
@@ -162,6 +137,8 @@ and these are the costs that went away.
 | **G27** voices unlistable | the free-text voice box and the caveat under it, in the lab and the composer both | `GET /v1/audio/voices?model=` returning `AudioVoiceInventory`: 54 voices here, each naming its file and whether it came from the bundle or the backend cache. `enumerable` says whether LewLM could enumerate at all, so the picker degrades to free entry honestly rather than by guess. |
 | **G24** scan rewrote silently | the warning on the Ops rescan button, and the habit of copying `metadata.sqlite3` first | the whole manifest is compared minus discovery timestamps, so a rewritten field reports `updated`; a directory carrying `lewlm.quantization_profile.json` is recognized as LewLM's own conversion output. The two cache bundles came back `mlx` / runnable, and this host went from 2 chat-ready models to 4. |
 | **G28** streaming changed the answer | the composer's default-model choice was meeting a broken model first; nothing to delete, because the workaround would have been to hide two of four chat-ready models | one prompt for one conversation across all three MLX entrypoints. The streaming path decoded the untemplated blob verbatim while the batch path templated it internally, so the model saw no turn structure and continued raw text; both now render the real message list through the backend's own chat template. Superseded by G29, which is the same path delivering correct text all at once. |
+| **G29** streamed text was correct but arrived in one delta | nothing — the workaround would have been to stop claiming the composer's spoken replies start early, and the feature was left in place with the caveat written down instead | the MLX path delivers incrementally, so a reply is cut into sentences as it arrives and the first one is synthesized about a sentence in rather than a turn late. Chap deleted no code to collect this, which is the point: the feature was built against the contract and the contract caught up. |
+| **G31** a model with no published context length was capped at 4,096 tokens | the bisection, and `DOCKTIZO_LEWLM_STRUCTURED_MAX_OUTPUT_TOKENS=768` in the bench configuration — a value arrived at by halving until requests stopped being refused | `registry/gguf_header.py` reads `<arch>.context_length` from the GGUF header, so a rescan moved both bundles from `null` to `131072` and stamps `context_length_source`. Routing scores against `runtime.serving_context_tokens()` — what the runtime will actually reserve — rather than the advertised window, and the ceiling for a model that is still unmeasured is `LEWLM_UNKNOWN_CONTEXT_TOKEN_LIMIT`, named in the refusal. The request that was `400 routing_error` answers in 3.2s. |
 | **G30** a caller-supplied `maxLength` killed the server | the probe's "did LewLM survive" check, which is now an assertion that the request was *answered*, and the restart between proof runs | LewLM keeps the bounds it compiles into a grammar inside llama.cpp's parser ceiling, parses every finished grammar with llama.cpp's own parser before it can reach a decoder, and names what it left out in `structured_output.grammar_relaxations`. A contract the decoder cannot be constrained to at all comes back as `invalid_request` naming the offending rule. |
 | **G19** no serving-profile listing | the "recommendation from the run you just triggered" framing in Ops | `GET /v1/serving-profiles` with `model` / `capability` / `limit`. Listing only — pin and delete were left as a real design decision rather than guessed at. |
 | Kokoro-shaped bundles undiscoverable | copying `kokoro-v1_0.safetensors` to `weights.safetensors` in the models directory | published-bundle discovery: `config.json` + model-named weights + no tokenizer or processor is MLX/runnable. The bundle is used as published. |
