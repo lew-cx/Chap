@@ -51,6 +51,14 @@ export function Jobs() {
     (item) => item.conversion_status !== 'runnable',
   );
 
+  // The target the run button will actually send. LewLM normally makes its
+  // default the convertible one, but the contract does not promise that, so the
+  // button is enabled by the target it sends rather than by any target at all.
+  const convertible =
+    (plan?.targets ?? []).find(
+      (target) => target.target_id === plan?.default_target_id && target.can_convert,
+    ) ?? (plan?.targets ?? []).find((target) => target.can_convert);
+
   return (
     <>
       <Section title="conversion" hint={`${needConversion.length} models need one`}>
@@ -94,11 +102,11 @@ export function Jobs() {
           <button
             type="button"
             className="btn"
-            disabled={!plan?.targets?.some((target) => target.can_convert) || busy != null}
+            disabled={!convertible || busy != null}
             onClick={() =>
               void act('convert', async () => {
-                const record = await lewlm.request<JobRecord>('POST', '/v1/lewlm/conversions/run', {
-                  json: { model_id: modelId, target_id: plan?.default_target_id },
+                const record = await lewlm.request<JobRecord>('POST', '/v1/lewlm/conversions', {
+                  json: { model_id: modelId, target_id: convertible?.target_id },
                 });
                 setJobId(record.job_id);
               })
