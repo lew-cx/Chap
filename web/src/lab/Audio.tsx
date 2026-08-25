@@ -20,6 +20,7 @@ import { buildMultipart, type AudioSpeechResponse, type AudioTranscriptionRespon
 import { CapabilityNotice } from '../components/CapabilityNotice.tsx';
 import { Disclosure } from '../components/Disclosure.tsx';
 import { Labelled, Stat } from '../components/Field.tsx';
+import { FilePicker } from '../components/FilePicker.tsx';
 import { Json } from '../components/Json.tsx';
 import { Section } from '../components/Screen.tsx';
 import { lewlm } from '../lib/client.ts';
@@ -27,7 +28,12 @@ import { useCapability } from '../lib/useCapability.ts';
 import { useVoices } from '../lib/useVoices.ts';
 import { Table } from '../components/Table.tsx';
 
-/** LewLM's `AudioSpeechCreateRequest.format` defaults to `wav` and is a bare string. */
+/**
+ * LewLM's `AudioSpeechCreateRequest.format` defaults to `wav` and is typed as a
+ * bare string, so this list is Chap's guess at what the runtime accepts rather
+ * than anything the contract publishes — tracked as docs/lewlm-gaps.md#g33. The
+ * field stays free-text so a format LewLM gained yesterday is still reachable.
+ */
 const FORMATS = ['wav', 'mp3', 'flac', 'ogg'] as const;
 
 function seconds(value: number | null | undefined): string {
@@ -86,33 +92,26 @@ export function Audio() {
           </div>
 
           <div>
-            <label className="btn inline-block cursor-pointer">
-              upload audio
-              <input
-                type="file"
-                accept="audio/*"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = '';
-                  if (!file) return;
-                  void act('transcribe', async () => {
-                    const form = buildMultipart([
-                      { uploadName: 'file', file, fileName: file.name },
-                    ]);
-                    if (language.trim()) form.set('language', language.trim());
-                    if (prompt.trim()) form.set('prompt', prompt.trim());
-                    setTranscript(
-                      await lewlm.request<AudioTranscriptionResponse>(
-                        'POST',
-                        '/v1/audio/transcriptions',
-                        { form },
-                      ),
-                    );
-                  });
-                }}
-              />
-            </label>
+            <FilePicker
+              label="upload audio"
+              accept="audio/*"
+              disabled={busy != null}
+              onFiles={([file]) => {
+                if (!file) return;
+                void act('transcribe', async () => {
+                  const form = buildMultipart([{ uploadName: 'file', file, fileName: file.name }]);
+                  if (language.trim()) form.set('language', language.trim());
+                  if (prompt.trim()) form.set('prompt', prompt.trim());
+                  setTranscript(
+                    await lewlm.request<AudioTranscriptionResponse>(
+                      'POST',
+                      '/v1/audio/transcriptions',
+                      { form },
+                    ),
+                  );
+                });
+              }}
+            />
           </div>
 
           {transcript && (

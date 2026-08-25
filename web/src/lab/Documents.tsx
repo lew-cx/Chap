@@ -22,18 +22,45 @@ import type {
 
 import { Disclosure } from '../components/Disclosure.tsx';
 import { Stat } from '../components/Field.tsx';
+import { FilePicker } from '../components/FilePicker.tsx';
 import { Json } from '../components/Json.tsx';
 import { Section } from '../components/Screen.tsx';
 import { lewlm } from '../lib/client.ts';
 import { usePolled } from '../lib/usePolled.ts';
 import { Table } from '../components/Table.tsx';
 
-/** LewLM takes bytes as base64 inside JSON on this route. */
+/**
+ * The largest upload this route is offered. `content_base64` puts the whole file
+ * in a JSON body and the encoder below walks it in memory, so the ceiling is
+ * Chap's, not LewLM's — said out loud rather than discovered as a frozen tab.
+ */
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+
+/**
+ * LewLM takes bytes as base64 inside JSON on this route.
+ *
+ * Chunked rather than one byte at a time: `String.fromCharCode` per byte builds
+ * a megabyte-long string a character at a time and locks the tab on a real PDF.
+ */
 async function toBase64(file: File): Promise<string> {
   const buffer = new Uint8Array(await file.arrayBuffer());
+  const CHUNK = 0x8000;
   let binary = '';
-  for (const byte of buffer) binary += String.fromCharCode(byte);
+  for (let at = 0; at < buffer.length; at += CHUNK) {
+    binary += String.fromCharCode(...buffer.subarray(at, at + CHUNK));
+  }
   return btoa(binary);
+}
+
+/**
+ * Base64 back to text. `atob` returns latin-1, so the UTF-8 markdown LewLM
+ * generates has to be decoded rather than displayed byte for byte — otherwise
+ * every accent, dash and CJK character in the round trip comes back mojibaked.
+ */
+function decodeUtf8(base64: string): string {
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
 export function Documents({ onChunks }: { onChunks?: (ingest: DocumentIngestResponse) => void }) {
@@ -56,10 +83,18 @@ export function Documents({ onChunks }: { onChunks?: (ingest: DocumentIngestResp
     }
   };
 
-  const upload = (files: FileList | null) =>
+  const upload = (chosen: File[]) =>
     void act('ingest', async () => {
-      const chosen = [...(files ?? [])];
       if (chosen.length === 0) return;
+
+      const tooBig = chosen.filter((file) => file.size > MAX_UPLOAD_BYTES);
+      if (tooBig.length > 0) {
+        throw new Error(
+          `${tooBig.map((file) => file.name).join(', ')} exceeds Chap's ${
+            MAX_UPLOAD_BYTES / (1024 * 1024)
+          } MB limit for this route, which sends the whole file as base64 JSON.`,
+        );
+      }
 
       const result = await lewlm.request<DocumentIngestResponse>('POST', '/v1/documents/ingest', {
         json: {
@@ -82,18 +117,7 @@ export function Documents({ onChunks }: { onChunks?: (ingest: DocumentIngestResp
   return (
     <>
       <Section title="ingest">
-        <label className="btn inline-block cursor-pointer">
-          upload documents
-          <input
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              upload(event.target.files);
-              event.target.value = '';
-            }}
-          />
-        </label>
+        <FilePicker label="upload documents" multiple onFiles={upload} disabled={busy != null} />
 
         {ingest && (
           <>
@@ -168,7 +192,7 @@ export function Documents({ onChunks }: { onChunks?: (ingest: DocumentIngestResp
                   hint={`${artifact.media_type} · ${artifact.size_bytes} bytes`}
                   open
                 >
-                  <Json value={atob(artifact.content_base64).slice(0, 4000)} maxHeight="20rem" />
+                  <Json value={decodeUtf8(artifact.content_base64).slice(0, 4000)} maxHeight="20rem" />
                 </Disclosure>
               </div>
             )}

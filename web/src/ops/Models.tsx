@@ -21,11 +21,13 @@ import type {
   ModelScanSummary,
 } from '@chap/lewlm';
 
+import { ConfirmButton } from '../components/ConfirmButton.tsx';
 import { Disclosure } from '../components/Disclosure.tsx';
 import { Stat } from '../components/Field.tsx';
 import { Json } from '../components/Json.tsx';
 import { Missing, Section } from '../components/Screen.tsx';
 import { lewlm } from '../lib/client.ts';
+import { shortModelId } from '../lib/useModels.ts';
 import { usePolled } from '../lib/usePolled.ts';
 import { Table, type Column } from '../components/Table.tsx';
 
@@ -58,13 +60,24 @@ export function Models() {
   };
 
   const columns: Column<Item>[] = [
-    { key: 'name', label: 'model', render: (row) => row.display_name || row.model_id },
+    {
+      key: 'name',
+      label: 'model',
+      // Two bundles here carry a 64-char digest as their display_name. Capped
+      // and middle-truncated: uncapped it pushed `mem` and `chat` — LewLM's
+      // reason for refusing a model — off the right edge of the viewport.
+      maxWidth: '18rem',
+      render: (row) => (
+        <span title={row.model_id}>{shortModelId(row.display_name || row.model_id, 10)}</span>
+      ),
+    },
     { key: 'family', label: 'family', render: (row) => row.architecture_family },
     { key: 'format', label: 'format', render: (row) => row.format_type },
     { key: 'quant', label: 'quant', render: (row) => row.quantization ?? '—' },
     {
       key: 'runtime',
       label: 'runtime',
+      maxWidth: '10rem',
       render: (row) => (row.runtime_affinity ?? []).join(', ') || '—',
     },
     {
@@ -190,23 +203,35 @@ function ModelDetail({
   const matrix = report?.capabilities ?? [];
 
   return (
-    <Section title={modelId}>
+    <Section title={shortModelId(modelId, 12)}>
       {reason && (
         <p className="mb-2 text-sm" style={{ color: 'var(--skin-muted)' }}>
           {reason}
         </p>
       )}
 
+      {/* Warming is additive; draining and unloading act on a live runtime that
+          other callers may be using, so those two take a second press. */}
       <div className="mb-3 flex flex-wrap gap-2">
         <button type="button" className="btn" disabled={busy} onClick={() => void lifecycle('warm')}>
           warm
         </button>
-        <button type="button" className="btn" disabled={busy} onClick={() => void lifecycle('drain')}>
-          drain
-        </button>
-        <button type="button" className="btn" disabled={busy} onClick={() => void lifecycle('unload')}>
-          unload
-        </button>
+        <ConfirmButton
+          label="drain"
+          confirmLabel="drain, ending in-flight work?"
+          className="btn"
+          disabled={busy}
+          title="refuses new work and waits for what is running to finish"
+          onConfirm={() => void lifecycle('drain')}
+        />
+        <ConfirmButton
+          label="unload"
+          confirmLabel="unload from memory?"
+          className="btn"
+          disabled={busy}
+          title="evicts the model; the next request pays the load cost again"
+          onConfirm={() => void lifecycle('unload')}
+        />
       </div>
 
       <div className="panel mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">

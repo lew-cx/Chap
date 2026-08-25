@@ -21,6 +21,7 @@ import { Labelled, Stat } from '../components/Field.tsx';
 import { Json } from '../components/Json.tsx';
 import { Missing, Section } from '../components/Screen.tsx';
 import { lewlm } from '../lib/client.ts';
+import { shortModelId } from '../lib/useModels.ts';
 import { usePolled } from '../lib/usePolled.ts';
 
 export function Jobs() {
@@ -74,8 +75,8 @@ export function Jobs() {
             >
               <option value="">select a model</option>
               {(inventory?.items ?? []).map((item) => (
-                <option key={item.model_id} value={item.model_id}>
-                  {item.display_name || item.model_id}
+                <option key={item.model_id} value={item.model_id} title={item.model_id}>
+                  {shortModelId(item.display_name || item.model_id)}
                   {item.conversion_status === 'runnable' ? ' (runnable)' : ''}
                 </option>
               ))}
