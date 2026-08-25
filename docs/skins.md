@@ -1,7 +1,7 @@
 # Skins
 
-Chap runs in two aesthetics from one component tree. Press `⌘\` to switch, or
-append `?skin=showroom` to any URL.
+Chap runs in two aesthetics from one component tree. Press `⌘\` (`Ctrl+\` off
+Apple hardware) to switch, or append `?skin=showroom` to any URL.
 
 - **Bench** — dense dark instrument panel, one amber accent, tabular numerals,
   a persistent telemetry rail, instant transitions. The working environment.

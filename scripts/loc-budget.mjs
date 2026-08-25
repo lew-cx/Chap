@@ -122,7 +122,7 @@ for (const name of packages) {
   for await (const path of sourceFiles(join(PACKAGES, name, 'src'))) {
     const loc = countCode(await readFile(path, 'utf8'));
     const kind = kindOf(path);
-    rows.push({ file: relative(ROOT, path), loc, kind });
+    rows.push({ file: relative(ROOT, path).replaceAll('\\', '/'), loc, kind });
     total[kind] += loc;
   }
   rows.sort((a, b) => b.loc - a.loc);

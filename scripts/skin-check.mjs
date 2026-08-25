@@ -74,11 +74,18 @@ async function* trees() {
   for (const tree of TREES) yield* files(tree);
 }
 
+/**
+ * A repo-relative path in one spelling, on every platform. `relative()` returns
+ * backslashes on Windows, and every literal this script compares against — and
+ * every path it prints — is written with forward slashes.
+ */
+const relPath = (path) => relative(ROOT, path).replaceAll('\\', '/');
+
 const violations = [];
 let variantUses = 0;
 
 for await (const path of trees()) {
-  const rel = relative(ROOT, path);
+  const rel = relPath(path);
   const source = await readFile(path, 'utf8');
 
   // Count `bench:` / `showroom:` Tailwind variants wherever they appear.

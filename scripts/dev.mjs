@@ -8,13 +8,18 @@
 
 import { spawn } from 'node:child_process';
 
+import { NPM, npmArgs } from './npm.mjs';
+
 const TASKS = [
   { name: 'server', args: ['run', 'dev', '--workspace', '@chap/server'] },
   { name: 'web', args: ['run', 'dev', '--workspace', '@chap/web'] },
 ];
 
 const children = TASKS.map(({ name, args }) => {
-  const child = spawn('npm', args, { stdio: 'inherit', env: { ...process.env, CHAP_TASK: name } });
+  const child = spawn(NPM.command, npmArgs(...args), {
+    stdio: 'inherit',
+    env: { ...process.env, CHAP_TASK: name },
+  });
   child.on('exit', (code, signal) => {
     if (shuttingDown) return;
     console.error(`\n[${name}] exited (${signal ?? code}) — stopping everything\n`);

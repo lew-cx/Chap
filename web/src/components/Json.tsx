@@ -64,20 +64,34 @@ export function Json({ value, maxHeight = '20rem' }: { value: unknown; maxHeight
 
 /** Copies text to the clipboard and says so for a moment. */
 export function CopyButton({ text, label = 'copy' }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<'idle' | 'copied' | 'blocked'>('idle');
 
   return (
     <button
       type="button"
       className="btn text-xs"
+      title={state === 'blocked' ? BLOCKED_REASON : undefined}
       onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1200);
-        });
+        const settle = (next: 'copied' | 'blocked') => {
+          setState(next);
+          setTimeout(() => setState('idle'), next === 'copied' ? 1200 : 2400);
+        };
+        /*
+         * `navigator.clipboard` is undefined outside a secure context, and a LAN
+         * address is not one — opening this page from a second machine over
+         * http://192.168.x.x is enough to remove the whole API. Unguarded, that
+         * is a TypeError thrown out of an event handler for a button that looks
+         * like it should work. The button says what happened instead.
+         */
+        const written = navigator.clipboard?.writeText(text);
+        if (!written) return settle('blocked');
+        void written.then(() => settle('copied'), () => settle('blocked'));
       }}
     >
-      {copied ? 'copied' : label}
+      {state === 'copied' ? 'copied' : state === 'blocked' ? 'blocked' : label}
     </button>
   );
 }
+
+const BLOCKED_REASON =
+  'The clipboard is only available in a secure context — localhost or HTTPS, not a LAN address.';

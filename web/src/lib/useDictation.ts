@@ -46,6 +46,8 @@ export interface DictationController {
   error: string | null;
   /** True when a transcription model exists and the browser can capture. */
   available: boolean;
+  /** Why not, when `available` is false. Null when it is true. */
+  unavailableReason: string | null;
   /** Button down: open the microphone. */
   hold: () => void;
   /** Button up: close it and transcribe what was said. */
@@ -75,6 +77,20 @@ export function useDictation(onTranscript: (text: string) => void): DictationCon
 
   const model = capability.models[0] ?? '';
   const available = Recorder.supported && model !== '';
+
+  /*
+   * Why the button is disabled, in the order the causes actually bite. The
+   * browser is asked first because it goes missing for a reason that has nothing
+   * to do with LewLM: getUserMedia and AudioWorklet are absent outside a secure
+   * context, so opening this page from another machine over a LAN address
+   * disables dictation while the transcription model is perfectly healthy.
+   * Reported the other way round, that reads as a broken host.
+   */
+  const unavailableReason = !Recorder.supported
+    ? 'no microphone here — dictation needs a secure context (localhost or HTTPS)'
+    : model === ''
+      ? (capability.reason ?? 'no transcription model on this host')
+      : null;
 
   // A hold in flight when the screen goes away would leave the microphone open
   // and the browser's recording indicator lit.
@@ -175,6 +191,7 @@ export function useDictation(onTranscript: (text: string) => void): DictationCon
     lastHeldSeconds,
     error,
     available,
+    unavailableReason,
     hold,
     release,
   };

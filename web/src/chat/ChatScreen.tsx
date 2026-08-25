@@ -502,11 +502,7 @@ export function ChatScreen() {
             className="chip"
             aria-pressed={dictation.state === 'listening'}
             disabled={!dictation.available}
-            title={
-              dictation.available
-                ? 'hold to speak; release to transcribe'
-                : (dictation.capability.reason ?? 'no transcription model on this host')
-            }
+            title={dictation.unavailableReason ?? 'hold to speak; release to transcribe'}
             style={
               dictation.error != null
                 ? { borderColor: 'var(--skin-danger)', color: 'var(--skin-danger)' }

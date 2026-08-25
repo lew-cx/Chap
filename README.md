@@ -202,7 +202,8 @@ rule turns "try again" into "fix this first".
 
 ## Two skins, one component tree
 
-Chap runs in two aesthetics, switchable with `Cmd+\`:
+Chap runs in two aesthetics, switchable with `Cmd+\` — `Ctrl+\` off Apple
+hardware, which is also what the control labels itself as there:
 
 - **Bench** — dense dark instrument panel with a live telemetry rail. The
   working environment.
@@ -237,6 +238,34 @@ npm run dev            # http://localhost:5173
 Copy `.env.example` to `.env` to point at a different LewLM or supply an API key.
 The key stays in the server process; the browser never receives it.
 
+### On another machine
+
+`npm run doctor` answers whether a machine can run Chap before anything else is
+attempted, and `npm run dev` runs it first. It asks the runtime rather than
+comparing version strings, because the two things Chap depends on arrived
+mid-22 and a Node fractionally short of either fails later, inside a module, as
+something that reads like a Chap bug:
+
+- **`node:sqlite`, unflagged** — module-collections' entire store. It ships with
+  Node, so there is no native module anywhere in the tree, no build toolchain to
+  install, and nothing to rebuild per platform.
+- **`--env-file-if-exists`** — how the server and both proofs read `.env`.
+
+Node 22.13 or newer has both. Nothing else here is platform-specific: no
+dependency compiles, paths are built rather than concatenated, and the scripts
+that shell out reach npm through its own CLI under the running node rather than
+a `npm.cmd` shim, so Windows needs no special casing. `npm run gen:types` falls
+back to the committed `vendor/openapi.json`, so a checkout with no LewLM beside
+it still generates.
+
+One caveat is the browser's, not Chap's. Push-to-talk dictation and
+copy-to-clipboard require a **secure context**, which `localhost` is and a LAN
+address is not. Reaching the dev server from a second machine over
+`http://192.168.x.x:5173` removes both APIs outright — the microphone button
+disables itself naming the secure context rather than blaming the transcription
+model, and the copy button reports `blocked`. Drive those two surfaces from the
+machine serving them, or put a certificate in front.
+
 ## Verifying
 
 ```bash
@@ -249,6 +278,7 @@ npm run loc:budget             # fails if any package's hand-written code grew
 npm run module:check           # fails if core learned a module's name
 npm run skin:check             # fails if a skin leaked out of the shell
 npm run typecheck
+npm run doctor                 # can this machine run Chap at all
 ```
 
 Both proofs read `.env`, so a correctly configured checkout proves against the
@@ -279,6 +309,7 @@ server/               Hono. Proxies /v1 to LewLM, mounts whatever MODULES holds.
                       A byte pipe — it must never transform a payload.
 web/                  Vite + React + Tailwind v4. The showroom.
 docs/                 modules.md, lewlm-gaps.md, docktizo-gaps.md, skins.md
-scripts/              gen-types, gen-gaps, proof, probe, loc-budget,
-                      module-check, skin-check, dev
+scripts/              doctor, gen-types, gen-gaps, proof, probe, loc-budget,
+                      module-check, skin-check, dev, npm (how to invoke npm on
+                      every platform, in one place)
 ```

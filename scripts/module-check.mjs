@@ -80,6 +80,13 @@ function importsIn(code) {
   return [...code.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((match) => match[1]);
 }
 
+/**
+ * A repo-relative path in one spelling, on every platform. `relative()` returns
+ * backslashes on Windows, and every literal this script compares against — and
+ * every path it prints — is written with forward slashes.
+ */
+const relPath = (path) => relative(ROOT, path).replaceAll('\\', '/');
+
 const violations = [];
 const note = (rel, line, message) => violations.push({ rel, line, message });
 
@@ -98,7 +105,7 @@ const forbiddenInCore = [
 
 for (const root of ['server/src', 'web/src']) {
   for await (const path of files(join(ROOT, root))) {
-    const rel = relative(ROOT, path);
+    const rel = relPath(path);
     if (REGISTRIES.has(rel)) continue;
     const code = stripComments(await readFile(path, 'utf8'));
     code.split('\n').forEach((line, index) => {
@@ -126,7 +133,7 @@ async function closure(entry) {
     try {
       source = await readFile(path, 'utf8');
     } catch {
-      note(relative(ROOT, entry), 0, `imports a file that does not exist: ${relative(ROOT, path)}`);
+      note(relPath(entry), 0, `imports a file that does not exist: ${relPath(path)}`);
       continue;
     }
 
@@ -144,14 +151,14 @@ for (const dir of moduleDirs) {
   try {
     pkg = JSON.parse(await readFile(pkgPath, 'utf8'));
   } catch {
-    note(relative(ROOT, pkgPath), 0, 'missing or unparseable package.json');
+    note(relPath(pkgPath), 0, 'missing or unparseable package.json');
     continue;
   }
 
   // --- 4. shape ---
   const exported = Object.keys(pkg.exports ?? {}).sort().join(',');
   if (exported !== './server,./web') {
-    note(relative(ROOT, pkgPath), 0, `exports must be exactly "./server" and "./web", found [${exported}]`);
+    note(relPath(pkgPath), 0, `exports must be exactly "./server" and "./web", found [${exported}]`);
   }
   // Two budgets, because a module pays two different costs: what it takes to
   // talk to its upstream, and what it takes to show it. A module always has a
@@ -160,7 +167,7 @@ for (const dir of moduleDirs) {
   const budget = pkg.chap?.budget;
   if (typeof budget?.integration !== 'number' || typeof budget?.ui !== 'number') {
     note(
-      relative(ROOT, pkgPath),
+      relPath(pkgPath),
       0,
       'missing "chap": { "budget": { "integration": N, "ui": M } } — every module carries its own budgets',
     );
@@ -171,7 +178,7 @@ for (const dir of moduleDirs) {
   for (const [half, { forbidden, label }] of Object.entries(HALVES)) {
     const entry = join(PACKAGES, dir, 'src', half === 'server' ? 'server.ts' : 'web.tsx');
     for (const { from, specifier } of await closure(entry)) {
-      const rel = relative(ROOT, from);
+      const rel = relPath(from);
 
       // A relative path out of the package is the loophole in rule 3: it reaches
       // core's source directly and no alias rule would ever see it.

@@ -28,6 +28,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import { NPM, npmArgs } from './npm.mjs';
+
 const execFileAsync = promisify(execFile);
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -43,7 +45,7 @@ async function proofScripts() {
 async function run(script, workDir) {
   const target = join(workDir, `${script.replace(/[:/]/g, '-')}.json`);
   try {
-    await execFileAsync('npm', ['run', '--silent', script, '--', '--emit', target], {
+    await execFileAsync(NPM.command, npmArgs('run', '--silent', script, '--', '--emit', target), {
       cwd: ROOT,
       maxBuffer: 1024 * 1024 * 16,
     });

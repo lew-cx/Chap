@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react';
 
 import { Section } from '../components/Screen.tsx';
+import { MOD_LABEL } from '../lib/platform.ts';
 import { useSkin } from '../store/skin.ts';
 
 export function SkinPanel() {
@@ -25,7 +26,7 @@ export function SkinPanel() {
 
   return (
     <>
-      <Section title="skin" hint="⌘\ anywhere">
+      <Section title="skin" hint={`${MOD_LABEL}\\ anywhere`}>
         <div className="flex gap-2">
           {(['bench', 'showroom'] as const).map((option) => (
             <button

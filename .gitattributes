@@ -1,7 +1,27 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 
+# Source and generated output are LF in the working tree on every platform, not
+# just in the object store. Without this, a Windows checkout gets CRLF while
+# `gen:types` and `gen:gaps` still emit LF — so `--check` compares a CRLF file
+# against LF content and reports drift that does not exist, on every run.
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.md    text eol=lf
+
 # Generated from LewLM's published contract by `npm run gen:types`.
 # Checked in deliberately: the diff is the record of contract drift.
 packages/lewlm/src/generated/** linguist-generated=true
 vendor/openapi.json linguist-generated=true
+
+# The same, for DocKtizo's contract and for the gap module `npm run gen:gaps`
+# writes from a live proof run. Checked in for the same reason, and because the
+# Settings screen imports the gap module — a checkout without it does not build.
+packages/module-docktizo/src/generated/** linguist-generated=true
+vendor/docktizo-contract.json linguist-generated=true
+vendor/docktizo-openapi.json linguist-generated=true
+web/src/generated/** linguist-generated=true

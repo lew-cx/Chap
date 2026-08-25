@@ -96,6 +96,14 @@ const BASE_URL = flag('base', TARGET === 'docktizo' ? 'http://127.0.0.1:8090' : 
 
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
+/**
+ * Where a Python venv keeps its interpreter. POSIX puts it in `bin/`, Windows in
+ * `Scripts/`, and looking in the wrong one reports "no venv" for a venv that is
+ * sitting right there — a confusing first failure on a fresh machine.
+ */
+const VENV_PYTHON =
+  process.platform === 'win32' ? '.venv/Scripts/python.exe' : '.venv/bin/python';
+
 // ---------------------------------------------------------------------------
 // 1. Resolve the OpenAPI document
 // ---------------------------------------------------------------------------
@@ -106,7 +114,7 @@ const sha256 = (value) => createHash('sha256').update(value).digest('hex');
  * 246 component schemas.
  */
 async function openapiFromVenv() {
-  const python = join(LEWLM_HOME, '.venv/bin/python');
+  const python = join(LEWLM_HOME, VENV_PYTHON);
   if (!existsSync(python)) throw new Error(`no venv at ${python} (set LEWLM_HOME)`);
   const { stdout } = await execFileAsync(
     python,
@@ -400,7 +408,7 @@ const DOCKTIZO_BANNER = [
 ].join('\n');
 
 async function docktizoFromVenv() {
-  const python = join(DOCKTIZO_HOME, '.venv/bin/python');
+  const python = join(DOCKTIZO_HOME, VENV_PYTHON);
   if (!existsSync(python)) throw new Error(`no venv at ${python} (set DOCKTIZO_HOME)`);
   const { stdout } = await execFileAsync(
     python,

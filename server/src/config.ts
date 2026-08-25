@@ -24,10 +24,13 @@ function trimTrailingSlash(value: string): string {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ChapConfig {
   return {
     host: env['CHAP_HOST'] || '127.0.0.1',
-    port: Number(env['CHAP_PORT'] ?? 8787),
-    lewlmBaseUrl: trimTrailingSlash(env['LEWLM_BASE_URL'] ?? 'http://127.0.0.1:8080'),
+    // `||`, not `??`: an empty CHAP_PORT is an unset one, and `Number('')` is 0,
+    // which node reads as "any free port" — a server that starts somewhere
+    // nobody is looking. Every other line here already reads it that way.
+    port: Number(env['CHAP_PORT'] || 8787),
+    lewlmBaseUrl: trimTrailingSlash(env['LEWLM_BASE_URL'] || 'http://127.0.0.1:8080'),
     lewlmApiKey: env['LEWLM_API_KEY'] || undefined,
     serveStatic: env['NODE_ENV'] === 'production',
-    dataDir: env['CHAP_DATA_DIR'] ?? '.chap',
+    dataDir: env['CHAP_DATA_DIR'] || '.chap',
   };
 }
