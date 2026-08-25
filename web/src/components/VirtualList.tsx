@@ -7,7 +7,7 @@
  * trivial and a virtualization dependency unnecessary.
  */
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
 interface Props<T> {
   items: readonly T[];
@@ -34,12 +34,33 @@ export function VirtualList<T>({
   // Follow only when the user has not scrolled away — yanking someone back to
   // the bottom while they are reading an event is the classic log-viewer sin.
   const atEnd = height === 0 || scrollTop + height >= items.length * rowHeight - rowHeight * 2;
-  if (follow && atEnd && viewport.current) {
-    queueMicrotask(() => {
-      const node = viewport.current;
-      if (node) node.scrollTop = node.scrollHeight;
-    });
-  }
+
+  /*
+   * In a layout effect, not in the render body. Scheduling a scroll from render
+   * meant a render React discarded or replayed still moved the viewport, which
+   * is a side effect at exactly the moment React reserves the right to not have
+   * happened.
+   */
+  useLayoutEffect(() => {
+    if (!follow || !atEnd) return;
+    const node = viewport.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [follow, atEnd, items.length, rowHeight]);
+
+  /*
+   * Measured by an observer rather than by an inline ref callback. The callback
+   * runs on every render and converges, but a window resize with no scroll never
+   * triggers one — so the visible-row count stayed at the old viewport's size.
+   */
+  useEffect(() => {
+    const node = viewport.current;
+    if (!node) return;
+    const measure = () => setHeight(node.clientHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const first = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const visible = Math.ceil(height / rowHeight) + overscan * 2;
@@ -47,10 +68,7 @@ export function VirtualList<T>({
 
   return (
     <div
-      ref={(node) => {
-        viewport.current = node;
-        if (node && node.clientHeight !== height) setHeight(node.clientHeight);
-      }}
+      ref={viewport}
       className={`scroll-thin overflow-y-auto ${className}`}
       onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
     >

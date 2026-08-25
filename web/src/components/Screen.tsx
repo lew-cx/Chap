@@ -6,7 +6,10 @@
  * them has to think about layout.
  */
 
-import { useState, type ComponentType, type ReactNode } from 'react';
+import { type ComponentType, type ReactNode } from 'react';
+
+import { ErrorBoundary } from './ErrorBoundary.tsx';
+import { useNav } from '../store/nav.ts';
 
 /**
  * One tab. A descriptor rather than a bare string because a module contributes
@@ -21,7 +24,11 @@ export interface ScreenTab {
 }
 
 export function Screen({ tabs, actions }: { tabs: readonly ScreenTab[]; actions?: ReactNode }) {
-  const [active, setActive] = useState(tabs[0]?.id ?? '');
+  // The tab is part of the route, so Ops -> Events survives a reload and fits in
+  // a link. An unknown id in the URL falls back to the first tab rather than
+  // rendering nothing.
+  const active = useNav((state) => state.tab);
+  const setTab = useNav((state) => state.setTab);
   const current = tabs.find((tab) => tab.id === active) ?? tabs[0];
   const Body = current?.component;
 
@@ -34,14 +41,22 @@ export function Screen({ tabs, actions }: { tabs: readonly ScreenTab[]; actions?
             type="button"
             className="chip"
             aria-pressed={tab.id === current?.id}
-            onClick={() => setActive(tab.id)}
+            onClick={() => setTab(tab.id)}
           >
             {tab.label ?? tab.id}
           </button>
         ))}
         {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
       </div>
-      <div className="scroll-thin flex-1 overflow-y-auto p-4">{Body && <Body />}</div>
+      {/* A flex column so a panel that wants the remaining height can ask for it
+          with `flex-1` instead of hard-coding one. Ordinary block content stacks
+          exactly as it did. */}
+      <div className="scroll-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
+        {/* Keyed by tab: switching away from a broken panel clears the failure. */}
+        <ErrorBoundary key={current?.id} label={current?.label ?? current?.id}>
+          {Body && <Body />}
+        </ErrorBoundary>
+      </div>
     </div>
   );
 }
@@ -77,5 +92,18 @@ export function Missing({ children }: { children: ReactNode }) {
     <p className="micro-label" style={{ color: 'var(--skin-faint)' }}>
       {children}
     </p>
+  );
+}
+
+/**
+ * An empty state that sits in the middle of the space it is explaining rather
+ * than at the top of it. Top-anchored placeholders read as a panel that failed to
+ * load; centred ones read as a panel with nothing in it yet.
+ */
+export function Empty({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-32 flex-1 items-center justify-center p-6 text-center">
+      <p className="micro-label">{children}</p>
+    </div>
   );
 }
