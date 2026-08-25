@@ -9,16 +9,16 @@ operations interface needs when the backend does the work.
 ```
   hand-written LewLM integration code
 
-    223  packages/lewlm/src/stream.ts     both surfaces, streaming or not, one union
+    235  packages/lewlm/src/stream.ts     both surfaces, streaming or not, one union
     108  packages/lewlm/src/types.ts      curated names over the generated contract
      92  packages/lewlm/src/errors.ts     one error type for everything
      84  packages/lewlm/src/http.ts       typed fetch + identity headers
-     56  packages/lewlm/src/events.ts     the /v1/events subscription, filtered
+     68  packages/lewlm/src/events.ts     the /v1/events subscription, filtered
      47  packages/lewlm/src/sse.ts        SSE reader
      26  packages/lewlm/src/index.ts
      25  packages/lewlm/src/multipart.ts  attachment parts
   -----
-    661  lewlm   (budget 900)
+    685  lewlm integration   (budget 900)
 ```
 
 That number is checked by `npm run loc:budget`. It buys a full chat surface,
@@ -34,16 +34,32 @@ is a module, including the vector store that used to be the one piece of real
 domain code in this repo:
 
 ```
-    661  lewlm              (budget 900)
-    478  module-collections (budget 500)    retrieval: chunks in node:sqlite
-   1521  module-docktizo    (budget 1550)   a document service, 23 of its 31 operations
-   2660  everything Chap hand-wrote
+                       integration     ui      budgets
+    lewlm                      685      —      900 / none
+    module-collections         268     210     300 / 260
+    module-docktizo            288    1221     340 / 1400
+  -----                      -----   -----
+                             1,241   1,431     2,672 hand-written in total
 ```
 
 A consumer who wants a chat and operations GUI deletes two directories and four
 lines and still has a coherent product. `npm run module:check` fails the build if
 a core file learns a module's name, so that stays true rather than merely being
 claimed. See [docs/modules.md](docs/modules.md).
+
+**Two budgets, because they answer different questions.** `integration` is what
+it costs to *talk* to an upstream — the client, the store, the server half, the
+types. `ui` is what it costs to *show* it. A file that renders is `.tsx` and a
+file that talks is `.ts`, so the split needs no directory discipline and JSX
+cannot hide on the wrong side of it.
+
+They used to be one number, and that number said the wrong thing. DocKtizo's
+integration is 288 lines against module-collections' 268 — nearly the same —
+while its UI is six times the size, because it reaches into review, revision and
+migration where collections reaches into one search box. Summed, DocKtizo read as
+three times more expensive to integrate. It is not. The line that carries this
+project's argument is the integration one, and it should barely move when a
+screen is added.
 
 The per-package split is the interesting number, and it does not say what you
 would expect. `module-docktizo` opened with six gaps against its upstream; all
@@ -55,8 +71,9 @@ possible that had not been worth building before.
 
 It happened again, at four times the size. DocKtizo grew a second half —
 `executive_memo.v1`, `proposal.v1`, an incompatible `status_report.v2`, and
-explicit workflow-version migration — and the module went 936 to 1,521 lines
-reaching all of it. Not one of those lines is a workaround. They are review
+explicit workflow-version migration — and the module went 936 to about 1,500
+lines reaching all of it. Almost all of that is UI; its integration half barely
+moved. Not one of those lines is a workaround. They are review
 decisions, revision history, targeted revisions, manual overrides, and a
 migration preview that reports what a version change would derive and what it
 would drop before anything is written.
@@ -86,13 +103,14 @@ probe in `npm run proof` that flips from `gap` to `FIXD` when LewLM gains the
 capability — telling us which workaround to delete.
 
 ```
-  24 passed · 0 failed · 3 gaps confirmed · 17 gaps fixed upstream
+  24 passed · 0 failed · 5 gaps confirmed · 17 gaps fixed upstream
 ```
 
-Two of the three `gap` lines are environment rather than contract — CORS is off
+Two of the five `gap` lines are environment rather than contract — CORS is off
 on this server, and the runtime honors none of the sampling controls it was sent,
-both reported faithfully. The one real entry is G13, and it is half of what it
-was:
+both reported faithfully. G32 and G33 are new and small, and both are the same
+shape: a value Chap had quietly filled in because the contract does not publish
+one. The largest real entry is G13, and it is half of what it was:
 
 `/v1/events` takes `types`, `scope`, `request_id` and `model_id`, applied at the
 bus before an event is queued, so the events explorer's filters are now *sent*
@@ -224,6 +242,8 @@ The key stays in the server process; the browser never receives it.
 ```bash
 npm run proof                  # exercises the transport layer against live LewLM
 npm run proof:dk               # the same, for DocKtizo — needs its API and worker
+npm run gen:gaps               # runs every proof; writes what Settings → Gaps shows
+npm run gen:gaps -- --check    # fails if that screen has drifted from the proofs
 npm run gen:types -- --check   # fails if LewLM's contract has drifted
 npm run loc:budget             # fails if any package's hand-written code grew
 npm run module:check           # fails if core learned a module's name
@@ -231,10 +251,20 @@ npm run skin:check             # fails if a skin leaked out of the shell
 npm run typecheck
 ```
 
+Both proofs read `.env`, so a correctly configured checkout proves against the
+same services the running app talks to. Without that, `npm run proof:dk` could
+not see the `DOCKTIZO_TOKEN` sitting beside it and reported five gaps DocKtizo
+had already closed.
+
 `npm run proof` is deliberately browser-free: it proves the transport layer
 independently of React, so a UI bug can never masquerade as an integration bug.
 It verifies that every model reporting `chat_ready` can actually load, rather
 than trusting the registry annotation on its own.
+
+`npm run gen:gaps` is the same idea aimed at the UI. The Settings → Gaps screen
+is generated from a real run of every proof rather than kept in step by hand,
+because that screen is where a visitor judges whether the project's central claim
+is honest and a hand-kept copy of a fact is exactly what drifts.
 
 ## Layout
 
@@ -249,6 +279,6 @@ server/               Hono. Proxies /v1 to LewLM, mounts whatever MODULES holds.
                       A byte pipe — it must never transform a payload.
 web/                  Vite + React + Tailwind v4. The showroom.
 docs/                 modules.md, lewlm-gaps.md, docktizo-gaps.md, skins.md
-scripts/              gen-types, proof, probe, loc-budget, module-check,
-                      skin-check, dev
+scripts/              gen-types, gen-gaps, proof, probe, loc-budget,
+                      module-check, skin-check, dev
 ```

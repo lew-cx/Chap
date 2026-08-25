@@ -153,8 +153,17 @@ for (const dir of moduleDirs) {
   if (exported !== './server,./web') {
     note(relative(ROOT, pkgPath), 0, `exports must be exactly "./server" and "./web", found [${exported}]`);
   }
-  if (typeof pkg.chap?.budget !== 'number') {
-    note(relative(ROOT, pkgPath), 0, 'missing "chap": { "budget": N } — every module carries its own budget');
+  // Two budgets, because a module pays two different costs: what it takes to
+  // talk to its upstream, and what it takes to show it. A module always has a
+  // UI — that is what `./web` is — so both are required here, unlike in
+  // loc-budget.mjs where a UI-less package like @chap/lewlm may declare one.
+  const budget = pkg.chap?.budget;
+  if (typeof budget?.integration !== 'number' || typeof budget?.ui !== 'number') {
+    note(
+      relative(ROOT, pkgPath),
+      0,
+      'missing "chap": { "budget": { "integration": N, "ui": M } } — every module carries its own budgets',
+    );
   }
 
   const home = join(PACKAGES, dir);

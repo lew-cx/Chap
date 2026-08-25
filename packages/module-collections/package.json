@@ -9,7 +9,10 @@
     "./web": "./src/web.tsx"
   },
   "chap": {
-    "budget": 500
+    "budget": {
+      "integration": 300,
+      "ui": 260
+    }
   },
   "dependencies": {}
 }

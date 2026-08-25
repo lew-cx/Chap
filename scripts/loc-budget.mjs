@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Count the hand-written integration code and fail if it grows past budget.
+ * Count the hand-written code and fail if it grows past budget.
  *
  * Chap's claim is that a full chat and operations GUI needs very little
  * application code when the services it fronts do the work. This turns that
@@ -11,13 +11,37 @@
  * edits it. The per-package split is the interesting part: it is what makes
  * "LewLM ships a contract and DocKtizo does not" a difference you can see.
  *
- * Generated files and tests do not count — they are contract or verification,
- * not the integration surface Chap ships. Blank lines and comment-only lines do
- * not count either; comments explaining why an upstream behaves a certain way
- * are the most valuable lines in a package and should never be discouraged.
+ * TWO BUDGETS, because they answer different questions.
  *
- * A module's UI counts. It is the integration surface, not decoration, and a
- * budget that cannot see it would be theatre.
+ *   integration  what it costs to TALK to the upstream — the client, the store,
+ *                the server half, the types. This is the number that carries
+ *                Chap's argument: it should barely move when a screen is added,
+ *                and it should rise when a contract is thin enough to force a
+ *                workaround.
+ *
+ *   ui           what it costs to SHOW the upstream. This is product surface. A
+ *                module that reaches further into what it fronts needs more of
+ *                it, and that is a decision about scope rather than a symptom of
+ *                a bad contract.
+ *
+ * They used to be one number, and that number said the wrong thing. DocKtizo's
+ * integration is 288 lines against module-collections' 268 — nearly the same —
+ * while its UI is six times the size, because it reaches into review, revision
+ * and migration and collections reaches into one search box. Summed, DocKtizo
+ * looked three times as expensive to integrate. It is not. Splitting the budget
+ * is what stops "we added a tab" from reading as contract debt.
+ *
+ * The split is by extension, not by directory: a file that renders is `.tsx`,
+ * and a file that talks is `.ts`. Nothing to keep tidy, and nothing to argue
+ * about — JSX cannot hide in a `.ts` file.
+ *
+ * A package with no `ui` budget declared may have no UI at all. That is checked
+ * rather than assumed, so a module cannot grow a screen without saying so.
+ *
+ * Generated files and tests do not count — they are contract or verification,
+ * not the surface Chap ships. Blank lines and comment-only lines do not count
+ * either; comments explaining why an upstream behaves a certain way are the most
+ * valuable lines in a package and should never be discouraged.
  */
 
 import { readdir, readFile } from 'node:fs/promises';
@@ -64,46 +88,93 @@ const packages = (await readdir(PACKAGES, { withFileTypes: true }))
   .map((entry) => entry.name)
   .sort();
 
-const over = [];
-let grand = 0;
+/** A file that renders is UI; a file that talks is integration. */
+const kindOf = (path) => (path.endsWith('.tsx') ? 'ui' : 'integration');
 
-console.log('\n  hand-written integration code\n');
-
-for (const name of packages) {
-  const manifest = JSON.parse(await readFile(join(PACKAGES, name, 'package.json'), 'utf8'));
-  const budget = manifest.chap?.budget;
-  if (typeof budget !== 'number') {
-    console.error(`  packages/${name}/package.json has no "chap": { "budget": N }\n`);
-    process.exit(1);
-  }
-
-  const rows = [];
-  let total = 0;
-  for await (const path of sourceFiles(join(PACKAGES, name, 'src'))) {
-    const loc = countCode(await readFile(path, 'utf8'));
-    rows.push({ file: relative(ROOT, path), loc });
-    total += loc;
-  }
-  rows.sort((a, b) => b.loc - a.loc);
-
-  for (const { file, loc } of rows) console.log(`  ${String(loc).padStart(5)}  ${file}`);
-  console.log(`  ${'-'.repeat(5)}`);
-  console.log(`  ${String(total).padStart(5)}  ${name}   (budget ${budget})\n`);
-
-  grand += total;
-  if (total > budget) over.push({ name, total, budget });
-}
-
-console.log(`  ${String(grand).padStart(5)}  everything Chap hand-wrote\n`);
-
-if (over.length > 0) {
-  for (const { name, total, budget } of over) {
-    console.error(`  ${name} is OVER BUDGET by ${total - budget} lines.`);
+/** Accepts a bare number as an integration-only budget, for a package with no UI. */
+function budgetsOf(manifest, name) {
+  const declared = manifest.chap?.budget;
+  if (typeof declared === 'number') return { integration: declared, ui: null };
+  if (declared && typeof declared.integration === 'number') {
+    return {
+      integration: declared.integration,
+      ui: typeof declared.ui === 'number' ? declared.ui : null,
+    };
   }
   console.error(
-    '\n  Either the code can be simpler, or an upstream gap is forcing a workaround.\n' +
-      '  If it is a gap, record it in that upstream\'s gaps doc under docs/ before\n' +
-      '  raising the budget.\n',
+    `  packages/${name}/package.json needs "chap": { "budget": { "integration": N, "ui": M } }\n`,
   );
   process.exit(1);
 }
+
+const over = [];
+const undeclared = [];
+const grand = { integration: 0, ui: 0 };
+
+console.log('\n  hand-written code\n');
+
+for (const name of packages) {
+  const manifest = JSON.parse(await readFile(join(PACKAGES, name, 'package.json'), 'utf8'));
+  const budget = budgetsOf(manifest, name);
+
+  const rows = [];
+  const total = { integration: 0, ui: 0 };
+  for await (const path of sourceFiles(join(PACKAGES, name, 'src'))) {
+    const loc = countCode(await readFile(path, 'utf8'));
+    const kind = kindOf(path);
+    rows.push({ file: relative(ROOT, path), loc, kind });
+    total[kind] += loc;
+  }
+  rows.sort((a, b) => b.loc - a.loc);
+
+  for (const { file, loc, kind } of rows) {
+    console.log(`  ${String(loc).padStart(5)}  ${kind === 'ui' ? 'ui  ' : '    '}  ${file}`);
+  }
+  console.log(`  ${'-'.repeat(5)}`);
+  console.log(
+    `  ${String(total.integration).padStart(5)}          ${name} integration   (budget ${budget.integration})`,
+  );
+  if (budget.ui !== null || total.ui > 0) {
+    console.log(
+      `  ${String(total.ui).padStart(5)}          ${name} ui            (budget ${budget.ui ?? 'none declared'})`,
+    );
+  }
+  console.log('');
+
+  grand.integration += total.integration;
+  grand.ui += total.ui;
+
+  if (total.integration > budget.integration) {
+    over.push({ name, kind: 'integration', total: total.integration, budget: budget.integration });
+  }
+  if (budget.ui === null && total.ui > 0) undeclared.push({ name, total: total.ui });
+  else if (budget.ui !== null && total.ui > budget.ui) {
+    over.push({ name, kind: 'ui', total: total.ui, budget: budget.ui });
+  }
+}
+
+console.log(`  ${String(grand.integration).padStart(5)}          talking to upstreams`);
+console.log(`  ${String(grand.ui).padStart(5)}          showing them`);
+console.log(`  ${String(grand.integration + grand.ui).padStart(5)}          everything Chap hand-wrote\n`);
+
+for (const { name, total } of undeclared) {
+  console.error(
+    `  ${name} has ${total} lines of UI and no "ui" budget. A module that grows a\n` +
+      `  screen has to say so — add "ui": N beside "integration".\n`,
+  );
+}
+
+if (over.length > 0) {
+  for (const { name, kind, total, budget } of over) {
+    console.error(`  ${name} ${kind} is OVER BUDGET by ${total - budget} lines.`);
+  }
+  console.error(
+    '\n  For integration: either the code can be simpler, or an upstream gap is\n' +
+      '  forcing a workaround. If it is a gap, record it in that upstream\'s gaps\n' +
+      '  doc under docs/ before raising the budget.\n' +
+      '\n  For ui: this is product surface, so the question is only whether the\n' +
+      '  screen earns its size. Raising it is a scope decision, not a concession.\n',
+  );
+}
+
+if (over.length > 0 || undeclared.length > 0) process.exit(1);

@@ -8,7 +8,9 @@
     ".": "./src/index.ts"
   },
   "chap": {
-    "budget": 900
+    "budget": {
+      "integration": 900
+    }
   },
   "dependencies": {}
 }
