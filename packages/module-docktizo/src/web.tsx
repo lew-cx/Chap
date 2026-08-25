@@ -37,10 +37,13 @@ import { Sources } from './ui/Sources.tsx';
  * `status_report.v2`, `executive_memo.v1` and `proposal.v1` installed, which one
  * you are working in is standing context rather than a step in one form.
  *
- * It is labelled `new document` because it does not describe what is on screen.
- * An existing document carries its own version — that is the whole point of
- * DocKtizo never resolving anything to "the latest" — so the document tab shows
- * the document's version and this control is left alone.
+ * It is labelled for what it selects — a workflow — rather than for an action it
+ * does not perform. `new document` was the earlier label and was wrong twice
+ * over: this control creates nothing, and it stays on screen while you browse
+ * documents it has no bearing on. An existing document carries its own version,
+ * which is the whole point of DocKtizo never resolving anything to "the latest",
+ * so the document tab shows the document's version and this control is left
+ * alone. The hint says which documents it does govern.
  */
 function WorkflowPicker() {
   const types = useWorkbench((state) => state.types);
@@ -53,10 +56,11 @@ function WorkflowPicker() {
   if (types.length === 0) return null;
 
   return (
-    <Labelled label="new document">
+    <Labelled label="workflow">
       <select
         className="field w-56"
-        aria-label="workflow"
+        aria-label="workflow for new documents"
+        title="the workflow a new document is generated in; existing documents carry their own"
         value={documentType?.workflow_id ?? ''}
         onChange={(event) => select(event.target.value)}
       >

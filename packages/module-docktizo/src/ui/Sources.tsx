@@ -15,6 +15,7 @@ import { Table } from '@/components/Table.tsx';
 
 import { docktizo } from '../client.ts';
 import { useWorkbench } from '../store.ts';
+import { Failure, useAction } from './Shared.tsx';
 
 type Kind = 'text' | 'structured' | 'file';
 
@@ -27,13 +28,13 @@ export function Sources() {
   const [text, setText] = useState('');
   const [structured, setStructured] = useState('{\n  \n}');
   const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  // The same hook every other write in this module uses. Hand-rolling it here
+  // also meant rendering the failure as a bare string, which threw away the
+  // `issue_locations` a 422 carries — the one thing these screens are for.
+  const { run, busy, failure } = useAction();
 
-  const submit = async () => {
-    setBusy(true);
-    setFailure(null);
-    try {
+  const submit = () =>
+    run(async () => {
       if (kind === 'file') {
         if (!file) throw new Error('choose a file first');
         addSource(await docktizo.sources.upload(file, title));
@@ -49,21 +50,12 @@ export function Sources() {
         );
       } else {
         addSource(
-          await docktizo.sources.create({
-            kind: 'text',
-            title: title || 'text source',
-            text,
-          }),
+          await docktizo.sources.create({ kind: 'text', title: title || 'text source', text }),
         );
       }
       setText('');
       setFile(null);
-    } catch (cause) {
-      setFailure(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
 
   return (
     <>
@@ -117,16 +109,12 @@ export function Sources() {
         )}
 
         <div className="mt-3">
-          <button type="button" className="btn-accent" disabled={busy} onClick={() => void submit()}>
+          <button type="button" className="btn-accent" disabled={busy} onClick={submit}>
             {busy ? 'uploading…' : 'create source'}
           </button>
         </div>
 
-        {failure && (
-          <p className="numeric mt-2" style={{ color: 'var(--skin-danger)' }}>
-            {failure}
-          </p>
-        )}
+        <Failure failure={failure} />
       </Section>
 
       <Section title="this session" hint={`${sources.length} · DocKtizo keeps the durable record`}>

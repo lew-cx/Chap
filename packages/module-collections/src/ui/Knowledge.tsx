@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 
 import type { DocumentChunk, DocumentIngestResponse, RetrievalContextResponse } from '@chap/lewlm';
 
+import { ConfirmButton } from '@/components/ConfirmButton.tsx';
 import { Disclosure } from '@/components/Disclosure.tsx';
 import { Labelled, Stat } from '@/components/Field.tsx';
 import { Json } from '@/components/Json.tsx';
@@ -82,18 +83,17 @@ export function Knowledge() {
               key: 'drop',
               label: '',
               render: (row) => (
-                <button
-                  type="button"
-                  className="chip"
-                  onClick={() =>
+                <ConfirmButton
+                  label="drop"
+                  confirmLabel={`drop ${row.chunk_count} chunks?`}
+                  title="deletes the collection and everything in it; there is no undo"
+                  onConfirm={() =>
                     void act('drop', async () => {
                       await collections.drop(row.name);
                       refresh();
                     })
                   }
-                >
-                  drop
-                </button>
+                />
               ),
             },
           ]}

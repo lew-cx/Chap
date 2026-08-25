@@ -28,8 +28,8 @@ import { Table } from '@/components/Table.tsx';
 
 import { docktizo, readiness } from '../client.ts';
 import { useWorkbench } from '../store.ts';
-import type { GenerationAccepted, OutputFormat, TemplateSummary, WorkflowReadiness } from '../types.ts';
-import { Failure, useAction } from './Shared.tsx';
+import type { GenerationAccepted, OutputFormat } from '../types.ts';
+import { Failure, toggle, useAction, useRead } from './Shared.tsx';
 
 export function Generate() {
   const documentType = useWorkbench((state) => state.documentType);
@@ -45,10 +45,8 @@ export function Generate() {
   const [formats, setFormats] = useState<OutputFormat[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [templateId, setTemplateId] = useState('');
-  const [templates, setTemplates] = useState<TemplateSummary[]>([]);
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID());
   const [accepted, setAccepted] = useState<GenerationAccepted | null>(null);
-  const [runnable, setRunnable] = useState<WorkflowReadiness | null>(null);
   const { run, busy, failure } = useAction();
 
   const workflowId = documentType?.workflow_id;
@@ -56,12 +54,26 @@ export function Generate() {
 
   useEffect(load, [load]);
 
+  const { data: templateList } = useRead(
+    () => (workflowId ? docktizo.templates.list(workflowId) : Promise.resolve(null)),
+    [workflowId],
+  );
+  const templates = templateList?.items ?? [];
+
+  /*
+   * Whether this host can actually run the workflow, before the button is
+   * pressed. DocKtizo rejects at submit time too, but a request that cannot
+   * succeed is better not sent — the same argument as CapabilityNotice makes for
+   * LewLM, now possible because readiness reports per-workflow capabilities.
+   *
+   * Read once and narrowed here: the report covers every workflow, so refetching
+   * it per selection was a request that could only ever return the same bytes.
+   */
+  const { data: report } = useRead(() => readiness(), []);
+  const runnable = (report?.workflows ?? []).find((entry) => entry.workflow_id === workflowId) ?? null;
+
   useEffect(() => {
     if (!workflowId) return;
-    docktizo.templates
-      .list(workflowId)
-      .then((result) => setTemplates(result.items))
-      .catch(() => setTemplates([]));
     // Two workflows rarely render the same formats, and a format left selected
     // after a switch would be a request nothing on screen shows you making.
     setFormats((current) => {
@@ -69,19 +81,6 @@ export function Generate() {
       return kept.length > 0 ? kept : supported.slice(0, 1);
     });
     setTemplateId('');
-  }, [workflowId]);
-
-  // Whether this host can actually run the workflow, before the button is
-  // pressed. DocKtizo rejects at submit time too, but a request that cannot
-  // succeed is better not sent — the same argument as CapabilityNotice makes
-  // for LewLM, now possible because readiness reports per-workflow capabilities.
-  useEffect(() => {
-    if (!workflowId) return;
-    readiness()
-      .then((report) =>
-        setRunnable((report.workflows ?? []).find((entry) => entry.workflow_id === workflowId) ?? null),
-      )
-      .catch(() => setRunnable(null));
   }, [workflowId]);
 
   if (!documentType) {
@@ -94,9 +93,6 @@ export function Generate() {
       </Section>
     );
   }
-
-  const toggle = <T,>(list: T[], value: T): T[] =>
-    list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 
   const submit = () =>
     run(async () => {

@@ -25,7 +25,7 @@ import { Table } from '@/components/Table.tsx';
 import { docktizo } from '../client.ts';
 import { useWorkbench } from '../store.ts';
 import type { MigrationPreview, MigrationRequest } from '../types.ts';
-import { Failure, useAction } from './Shared.tsx';
+import { Failure, toggle, useAction } from './Shared.tsx';
 
 export function Migrate({
   documentId,
@@ -166,13 +166,7 @@ export function Migrate({
                     <input
                       type="checkbox"
                       checked={acknowledged.includes(row.code)}
-                      onChange={() =>
-                        setAcknowledged((current) =>
-                          current.includes(row.code)
-                            ? current.filter((code) => code !== row.code)
-                            : [...current, row.code],
-                        )
-                      }
+                      onChange={() => setAcknowledged(toggle(acknowledged, row.code))}
                     />
                   ) : (
                     '—'

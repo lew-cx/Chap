@@ -213,6 +213,10 @@ export const docktizo = {
     /**
      * The workspace's documents, newest first and cursor-paged.
      *
+     * "Newest" is `created_at`, not `updated_at` — measured, not assumed. The
+     * table shows `updated_at`, so the column and the ordering are two different
+     * dates and the rows will not look sorted by the one on screen.
+     *
      * Chap reads one page. This route is new: until it existed a document was
      * reachable only through an id something else had just handed over, and the
      * tab below opened on a box asking you to paste one.
@@ -222,7 +226,12 @@ export const docktizo = {
     get: (id: string) => call<DocumentDetail>(`/documents/${encodeURIComponent(id)}`),
 
     /**
-     * The version history, newest first and cursor-paged.
+     * The version history, OLDEST first and cursor-paged.
+     *
+     * Measured against a live DocKtizo: a three-revision document comes back
+     * `[1, 2, 3]`. This said "newest first" for as long as it existed and the
+     * screen repeated the claim, which is the kind of small untruth that is
+     * only ever found by reading the response.
      *
      * Chap reads one page. A document accumulates revisions at human speed, and
      * a "load more" that has never had anything to load is a control Chap would

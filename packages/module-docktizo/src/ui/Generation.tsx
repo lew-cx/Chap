@@ -46,6 +46,13 @@ interface StreamCompleted {
 
 const isIn = (set: readonly string[], state: GenerationStatus['state']) => set.includes(state);
 
+/** How many times a stream may drop without advancing before the watch gives up. */
+const RETRIES = 4;
+const RETRY_MS = 500;
+
+/** An unknown throw as one line of text. */
+const message = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
+
 export function Generation() {
   const generationId = useWorkbench((state) => state.generationId);
   const watch = useWorkbench((state) => state.watch);
@@ -95,25 +102,50 @@ function Watch({ generationId }: { generationId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    // Where the next attempt resumes from. A local rather than the state below:
+    // a reconnect has to read what the last frame set, not what this closure
+    // captured when the effect ran.
+    let cursor: string | null = null;
 
-    const follow = async () => {
+    /** One connection. `false` when it ended without a completion frame. */
+    const follow = async (): Promise<boolean> => {
+      // Null on the first attempt: start from the beginning of the log. A live
+      // generation and one that finished an hour ago replay identically, which
+      // is why there is no separate "load history" path.
+      const res = await docktizo.generations.stream(generationId, cursor, controller.signal);
+
+      for await (const frame of readSSE(res)) {
+        if (frame.event === 'stream_completed') {
+          const completion = JSON.parse(frame.data) as StreamCompleted;
+          cursor = completion.checkpoint;
+          setCheckpoint(cursor);
+          setDone(completion);
+          return true;
+        }
+        setEvents((current) => [...current, JSON.parse(frame.data) as GenerationEvent]);
+        if (frame.id) {
+          cursor = frame.id;
+          setCheckpoint(cursor);
+        }
+      }
+      return false;
+    };
+
+    const watch = async () => {
       try {
         setStatus(await docktizo.generations.get(generationId));
 
-        // No cursor: start from the beginning of the log. A live generation and
-        // one that finished an hour ago replay identically, which is why there
-        // is no separate "load history" path.
-        const res = await docktizo.generations.stream(generationId, null, controller.signal);
-
-        for await (const frame of readSSE(res)) {
-          if (frame.event === 'stream_completed') {
-            const completion = JSON.parse(frame.data) as StreamCompleted;
-            setCheckpoint(completion.checkpoint);
-            setDone(completion);
-            break;
-          }
-          setEvents((current) => [...current, JSON.parse(frame.data) as GenerationEvent]);
-          if (frame.id) setCheckpoint(frame.id);
+        // The cursor is used, not just displayed. Resumability is this
+        // endpoint's headline, and a `checkpoint` that is written and never read
+        // back is a claim rather than a feature: without this loop a dropped
+        // connection ended the watch and lost the rest of the run.
+        for (let attempt = 0, mark = cursor; !(await follow()); mark = cursor) {
+          if (controller.signal.aborted) return;
+          // A drop that made progress is not the same as one that made none.
+          attempt = cursor === mark ? attempt + 1 : 0;
+          if (attempt > RETRIES) throw new Error('the event stream kept dropping');
+          // An abort during the wait surfaces as the next connection throwing.
+          await new Promise((resolve) => setTimeout(resolve, RETRY_MS * 2 ** attempt));
         }
 
         const final = await docktizo.generations.get(generationId);
@@ -126,12 +158,11 @@ function Watch({ generationId }: { generationId: string }) {
         setArtifacts(await Promise.all(final.artifact_ids.map((id) => docktizo.artifacts.get(id))));
       } catch (cause) {
         // An abort is an unmount, not a failure.
-        if (controller.signal.aborted) return;
-        setFailure(cause instanceof Error ? cause.message : String(cause));
+        if (!controller.signal.aborted) setFailure(message(cause));
       }
     };
 
-    void follow();
+    void watch();
     return () => controller.abort();
   }, [generationId]);
 
@@ -163,10 +194,13 @@ function Watch({ generationId }: { generationId: string }) {
 
         {!terminal && (
           <div className="mt-3">
+            {/* The refusal is the interesting case — a run past the point of
+                cancellation says so, and swallowing that left the button looking
+                broken instead. */}
             <button
               type="button"
               className="chip"
-              onClick={() => void docktizo.generations.cancel(generationId).catch(() => undefined)}
+              onClick={() => void docktizo.generations.cancel(generationId).catch((cause: unknown) => setFailure(message(cause)))}
             >
               cancel
             </button>
@@ -187,6 +221,12 @@ function Watch({ generationId }: { generationId: string }) {
             </p>
             <p className="mt-1 text-sm">{status.error.message}</p>
           </div>
+        )}
+
+        {/* A failure in the watch itself — a refused cancel, a stream that kept
+            dropping. Distinct from `status.error`, which is the run's own. */}
+        {failure && (
+          <p className="numeric mt-3" style={{ color: 'var(--skin-danger)' }}>{failure}</p>
         )}
       </Section>
 
@@ -227,24 +267,32 @@ function Watch({ generationId }: { generationId: string }) {
   );
 }
 
-/** Where the run got to. The order is DocKtizo's, from its published contract. */
+/**
+ * Where the run got to. The order is DocKtizo's, from its published contract.
+ *
+ * An ordered list with `aria-current="step"`, not toggles. This is a readout,
+ * and `aria-pressed` on a plain `<span>` is invalid twice over — the attribute
+ * needs `role="button"`, and nothing here is pressable.
+ */
 function Pipeline({ state }: { state: GenerationStatus['state'] }) {
   const reached = (PIPELINE_ORDER as readonly string[]).indexOf(state);
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <ol className="flex flex-wrap gap-1">
       {PIPELINE_ORDER.map((step, index) => (
-        <span
+        <li
           key={step}
           className="chip"
-          aria-pressed={step === state}
+          aria-current={step === state ? 'step' : undefined}
           style={{
             opacity: reached === -1 || index <= reached ? 1 : 0.4,
+            borderColor: step === state ? 'var(--skin-accent)' : undefined,
+            color: step === state ? 'var(--skin-accent)' : undefined,
           }}
         >
           {step}
-        </span>
+        </li>
       ))}
-    </div>
+    </ol>
   );
 }

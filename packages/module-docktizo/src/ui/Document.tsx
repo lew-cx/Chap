@@ -11,7 +11,7 @@
  * these actions is one a double-click must not perform twice.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { Labelled, Stat } from '@/components/Field.tsx';
 import { StatusDot } from '@/components/Nav.tsx';
@@ -20,14 +20,9 @@ import { Table } from '@/components/Table.tsx';
 
 import { docktizo } from '../client.ts';
 import { useWorkbench } from '../store.ts';
-import type {
-  ApprovalRecord,
-  DocumentDetail,
-  RevisionDetail,
-  RevisionSummary,
-} from '../types.ts';
+import type { ApprovalRecord, DocumentDetail, RevisionSummary } from '../types.ts';
 import { Migrate } from './Migrate.tsx';
-import { Artifacts, Failure, useAction } from './Shared.tsx';
+import { Artifacts, Failure, useAction, useRead } from './Shared.tsx';
 
 export function Document() {
   const documentId = useWorkbench((state) => state.documentId);
@@ -49,24 +44,13 @@ export function Document() {
  * `GET /v1/documents` replaced the argument with a route.
  */
 function Catalogue({ onOpen }: { onOpen: (documentId: string) => void }) {
-  const [documents, setDocuments] = useState<DocumentDetail[]>([]);
-  const [more, setMore] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-
-  useEffect(() => {
-    docktizo.documents
-      .list()
-      .then((page) => {
-        setDocuments(page.items);
-        setMore(page.has_more);
-      })
-      .catch((cause: unknown) => setFailure(cause instanceof Error ? cause.message : String(cause)));
-  }, []);
+  const { data, failure } = useRead(() => docktizo.documents.list(), []);
+  const documents = data?.items ?? [];
 
   return (
     <Section
       title="documents"
-      hint={`${documents.length}${more ? '+ · newest page' : ''} in this workspace`}
+      hint={`${documents.length}${data?.has_more ? '+ · newest page' : ''} in this workspace`}
     >
       <Table
         columns={[
@@ -82,42 +66,32 @@ function Catalogue({ onOpen }: { onOpen: (documentId: string) => void }) {
         ]}
         rows={documents}
         onSelect={(row) => onOpen(row.document_id)}
-        empty={failure ?? 'none yet — the generate tab makes one'}
+        empty={failure?.message ?? 'none yet — the generate tab makes one'}
       />
     </Section>
   );
 }
 
 function Detail({ documentId, onClose }: { documentId: string; onClose: () => void }) {
-  const [document, setDocument] = useState<DocumentDetail | null>(null);
-  const [revisions, setRevisions] = useState<RevisionSummary[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  // One read for the whole tab. Every write below changes the head revision, the
+  // review state, or both, so refreshing anything less would leave two panels
+  // disagreeing about the same document.
+  const { data, failure, reload } = useRead(
+    () =>
+      Promise.all([docktizo.documents.get(documentId), docktizo.documents.revisions(documentId)]),
+    [documentId],
+  );
+  const [picked, setPicked] = useState<string | null>(null);
 
-  // One reload for the whole tab. Every write below changes the head revision,
-  // the review state, or both, so refreshing anything less would leave two
-  // panels disagreeing about the same document.
-  const reload = useCallback(async () => {
-    try {
-      const [detail, history] = await Promise.all([
-        docktizo.documents.get(documentId),
-        docktizo.documents.revisions(documentId),
-      ]);
-      setDocument(detail);
-      setRevisions(history.items);
-      setSelectedId((current) => current ?? detail.current_revision_id);
-    } catch (cause) {
-      setFailure(cause instanceof Error ? cause.message : String(cause));
-    }
-  }, [documentId]);
+  if (!data) return <Missing>{failure?.message ?? `reading ${documentId}…`}</Missing>;
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  if (!document) return <Missing>{failure ?? `reading ${documentId}…`}</Missing>;
-
+  const [document, history] = data;
+  const revisions: RevisionSummary[] = history.items;
   const head = document.current_revision_id;
+  // Falling back to head rather than latching it on first load: until a row is
+  // picked, the panel below follows the document, so a revision that lands is
+  // the one you are looking at.
+  const selectedId = picked ?? head;
 
   return (
     <>
@@ -144,7 +118,7 @@ function Detail({ documentId, onClose }: { documentId: string; onClose: () => vo
         </div>
       </Section>
 
-      <Section title="revisions" hint={`${revisions.length} · newest first`}>
+      <Section title="revisions" hint={`${revisions.length} · oldest first · head is last`}>
         <Table
           columns={[
             { key: 'n', label: '#', numeric: true, render: (row) => row.revision_number },
@@ -169,7 +143,7 @@ function Detail({ documentId, onClose }: { documentId: string; onClose: () => vo
             },
           ]}
           rows={revisions}
-          onSelect={(row) => setSelectedId(row.revision_id)}
+          onSelect={(row) => setPicked(row.revision_id)}
           selected={(row) => row.revision_id === selectedId}
           empty="none"
         />
@@ -205,28 +179,23 @@ function Revision({
   isHead: boolean;
   onChange: () => void;
 }) {
-  const [revision, setRevision] = useState<RevisionDetail | null>(null);
-  const [decisions, setDecisions] = useState<ApprovalRecord[]>([]);
-
-  const read = useCallback(async () => {
-    const [detail, history] = await Promise.all([
-      docktizo.revisions.get(revisionId),
-      docktizo.revisions.approvals(revisionId),
-    ]);
-    setRevision(detail);
-    setDecisions(history.decisions);
-  }, [revisionId]);
-
-  useEffect(() => {
-    void read().catch(() => undefined);
-  }, [read]);
+  const { data, failure, reload } = useRead(
+    () =>
+      Promise.all([docktizo.revisions.get(revisionId), docktizo.revisions.approvals(revisionId)]),
+    [revisionId],
+  );
 
   const refresh = () => {
-    void read().catch(() => undefined);
+    reload();
     onChange();
   };
 
-  if (!revision) return <Missing>reading {revisionId}…</Missing>;
+  // This read used to swallow its failure, so an unreadable revision looked
+  // identical to one still loading and stayed that way.
+  if (!data) return <Missing>{failure?.message ?? `reading ${revisionId}…`}</Missing>;
+
+  const [revision, approvals] = data;
+  const decisions: ApprovalRecord[] = approvals.decisions;
 
   return (
     <>
