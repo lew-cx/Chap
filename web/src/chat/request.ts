@@ -54,8 +54,16 @@ export interface ComposerState {
   surface: Surface;
   stream: boolean;
   model: string;
-  maxTokens: number;
-  temperature: number;
+  /**
+   * Held as typed text, not as a number.
+   *
+   * `Number('')` is `0`, so a field that coerces on every keystroke cannot be
+   * cleared — it snaps back to zero as the last digit goes, and sends a request
+   * asking for zero tokens. The bounds below are applied once, on the way into
+   * the payload, which is also the only place they can be enforced honestly.
+   */
+  maxTokens: string;
+  temperature: string;
   sampling: SamplingControls;
   reasoningVisibility: ReasoningVisibility;
   applyServingProfile: boolean;
@@ -68,6 +76,17 @@ export interface ComposerState {
    * session's `context_policy` decides what the model sees.
    */
   sessionId: string | null;
+}
+
+/** Bounds for the two free-typed numbers, shared by the inputs and the builder. */
+export const MAX_TOKENS = { min: 1, max: 4096, fallback: 256 };
+export const TEMPERATURE = { min: 0, max: 2, fallback: 0.7 };
+
+/** A typed number, clamped to its field's range. Blank and junk take the default. */
+export function clamped(raw: string, bounds: { min: number; max: number; fallback: number }): number {
+  const parsed = Number(raw);
+  if (raw.trim() === '' || !Number.isFinite(parsed)) return bounds.fallback;
+  return Math.min(bounds.max, Math.max(bounds.min, parsed));
 }
 
 export const INITIAL_FORMAT: FormatState = {
@@ -121,27 +140,49 @@ export function parseFormat(format: FormatState): { value: ResponseFormat | null
 }
 
 /**
+ * The id each pasted passage will actually carry, aligned to `sources` — `null`
+ * where a source is dropped for being empty.
+ *
+ * Exported because the panel has to label a passage with the id that is sent,
+ * not with its position on screen. Numbering the two independently is what let
+ * them disagree: an empty source above a filled one shifted every id below it,
+ * and the panel went on showing the unshifted ones.
+ */
+export function citationIds(sources: readonly ContextSource[]): (string | null)[] {
+  let next = 0;
+  return sources.map((source) => (source.text.trim() ? `chap-${next++}` : null));
+}
+
+/**
  * Pasted passages, packaged the way `/v1/documents/ingest` would package a real
  * document — so the citations LewLM returns resolve against the same ids, and
  * M9 can swap the retrieval store in behind an unchanged shape.
  */
 export function buildCitationContext(sources: ContextSource[]): CitationContextPackage | null {
-  const usable = sources.filter((source) => source.text.trim());
+  const ids = citationIds(sources);
+  const usable = sources
+    .map((source, index) => ({ source, id: ids[index] ?? null }))
+    .filter((entry): entry is { source: ContextSource; id: string } => entry.id !== null);
   if (usable.length === 0) return null;
 
+  const named = usable.map((entry, position) => ({
+    ...entry,
+    name: entry.source.label || `source ${position + 1}`,
+  }));
+
   return {
-    sources: usable.map((source, index) => ({
-      source_id: `chap-${index}`,
+    sources: named.map((entry) => ({
+      source_id: entry.id,
       source_type: 'text',
-      source_name: source.label || `source ${index + 1}`,
-      source_label: source.label || `source ${index + 1}`,
+      source_name: entry.name,
+      source_label: entry.name,
     })),
-    chunks: usable.map((source, index) => ({
-      chunk_id: `chap-${index}#0`,
-      text: source.text,
-      source_id: `chap-${index}`,
-      section_id: `chap-${index}:body`,
-      source_label: source.label || `source ${index + 1}`,
+    chunks: named.map((entry) => ({
+      chunk_id: `${entry.id}#0`,
+      text: entry.source.text,
+      source_id: entry.id,
+      section_id: `${entry.id}:body`,
+      source_label: entry.name,
       section_label: 'body',
     })),
   };
@@ -178,7 +219,7 @@ export function buildRequest(
   const shared = {
     ...(state.model ? { model: state.model } : {}),
     ...(state.sessionId ? { session_id: state.sessionId } : {}),
-    temperature: state.temperature,
+    temperature: clamped(state.temperature, TEMPERATURE),
     stream: state.stream,
     apply_serving_profile: state.applyServingProfile,
     reasoning_visibility: state.reasoningVisibility,
@@ -207,7 +248,7 @@ export function buildRequest(
     ];
     return {
       endpoint: '/v1/responses',
-      payload: { ...shared, input, max_output_tokens: state.maxTokens },
+      payload: { ...shared, input, max_output_tokens: clamped(state.maxTokens, MAX_TOKENS) },
       uploads,
     };
   }
@@ -218,7 +259,7 @@ export function buildRequest(
   ];
   return {
     endpoint: '/v1/chat/completions',
-    payload: { ...shared, messages, max_tokens: state.maxTokens },
+    payload: { ...shared, messages, max_tokens: clamped(state.maxTokens, MAX_TOKENS) },
     uploads,
   };
 }

@@ -11,7 +11,7 @@
  * shape does not change, which is why this is worth building now.
  */
 
-import type { ContextSource } from './request.ts';
+import { citationIds, type ContextSource } from './request.ts';
 
 interface Props {
   sources: ContextSource[];
@@ -21,6 +21,11 @@ interface Props {
 export function ContextPanel({ sources, onChange }: Props) {
   const update = (index: number, change: Partial<ContextSource>) =>
     onChange(sources.map((source, at) => (at === index ? { ...source, ...change } : source)));
+
+  // The ids the request builder will mint, not positions in this array. An empty
+  // source is dropped before the request is built, so it has no id to show, and
+  // every source under it moves up one.
+  const ids = citationIds(sources);
 
   return (
     <div className="flex flex-col gap-3">
@@ -33,8 +38,12 @@ export function ContextPanel({ sources, onChange }: Props) {
       {sources.map((source, index) => (
         <div key={index} className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <span className="numeric" style={{ color: 'var(--skin-faint)' }}>
-              chap-{index}
+            <span
+              className="numeric"
+              style={{ color: 'var(--skin-faint)' }}
+              title={ids[index] ? 'the chunk id sent to LewLM' : 'empty — not sent, so it has no id'}
+            >
+              {ids[index] ?? 'not sent'}
             </span>
             <input
               className="field flex-1"

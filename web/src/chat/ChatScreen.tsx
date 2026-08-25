@@ -29,6 +29,7 @@ import {
 } from '@chap/lewlm';
 
 import { Labelled, Stat } from '../components/Field.tsx';
+import { FilePicker } from '../components/FilePicker.tsx';
 import { Markdown } from '../components/Markdown.tsx';
 import { lewlm } from '../lib/client.ts';
 import { useModels } from '../lib/useModels.ts';
@@ -48,7 +49,9 @@ import { SpeechPanel } from './SpeechPanel.tsx';
 import {
   buildRequest,
   INITIAL_FORMAT,
+  MAX_TOKENS,
   parseFormat,
+  TEMPERATURE,
   type Attachment,
   type ComposerState,
 } from './request.ts';
@@ -105,15 +108,15 @@ function reasoningText(reasoning: ReasoningOutput): string | null {
 }
 
 export function ChatScreen() {
-  const { models, reportLoadFailure } = useModels();
+  const { models, error: modelsError, reportLoadFailure } = useModels();
   const grounding = useGrounding((state) => state.chunks);
   const groundingUsed = useGrounding((state) => state.clear);
   const [state, setState] = useState<ComposerState>({
     surface: 'chat',
     stream: true,
     model: '',
-    maxTokens: 256,
-    temperature: 0.7,
+    maxTokens: String(MAX_TOKENS.fallback),
+    temperature: String(TEMPERATURE.fallback),
     sampling: {},
     reasoningVisibility: 'hidden',
     applyServingProfile: true,
@@ -129,10 +132,20 @@ export function ChatScreen() {
   const [drawer, setDrawer] = useState<Drawer>(null);
   const [samplingReport, setSamplingReport] = useState<SamplingControlReport | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [error, setError] = useState<LewLMApiError | null>(null);
+  // Not narrowed to `LewLMApiError`: a bug in Chap throws too, and casting one
+  // to the other put a value with no `fields` into a banner that reads `fields`,
+  // which took the whole app down with it.
+  const [error, setError] = useState<Error | null>(null);
   const [streaming, setStreaming] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  /*
+   * Part names must be unique within a request, and only within one. Derived
+   * from `attachments.length` they were not: removing any file but the last made
+   * the count stop tracking the highest suffix in use, so the next attachment
+   * collided with one already staged. A counter that only ever goes up cannot.
+   */
+  const nextUpload = useRef(0);
   const promptTokens = useTokenCount(prompt, state.model);
   const structuredSupport = useStructuredSupport(state.model);
   const speech = useSpeech();
@@ -270,24 +283,25 @@ export function ChatScreen() {
       // Both paths abandon the reply, so nothing should keep reading it out.
       speech.cancel();
       if (isAbort(cause)) return;
-      const failure = cause as LewLMApiError;
+      const failure = cause instanceof Error ? cause : new Error(String(cause));
       setError(failure);
 
       // Roll the whole exchange back and hand the prompt to the composer. The
       // turn never happened — leaving it in the transcript would both misreport
       // the conversation and re-send a failed prompt as history on the retry.
-      setTurns((current) =>
-        current.at(-1)?.role === 'assistant' && !current.at(-1)?.text
-          ? current.slice(0, -2)
-          : current,
-      );
+      //
+      // A reply that streamed some text before failing is rolled back too. It is
+      // a fragment of an answer the model never finished; keeping it while the
+      // prompt goes back to the composer duplicates the prompt on retry and
+      // presents a truncation as if it were the reply.
+      setTurns((current) => (current.at(-1)?.role === 'assistant' ? current.slice(0, -2) : current));
       setPrompt((current) => current || text);
       setAttachments((current) => (current.length > 0 ? current : attachments));
 
       // `chat_ready` said yes and the runtime said no. LewLM's envelope carries
       // the architecture and the underlying cause, so demote this model with a
       // real reason rather than letting the user pick it again.
-      if (failure.code === 'model_load_failed' && state.model) {
+      if (failure instanceof LewLMApiError && failure.code === 'model_load_failed' && state.model) {
         const detail = failure.details as { architecture_family?: string; cause?: string };
         reportLoadFailure(
           state.model,
@@ -307,7 +321,7 @@ export function ChatScreen() {
       <div className="scroll-thin flex-1 overflow-y-auto px-5 py-4">
         <div className="flex flex-col gap-2">
           {turns.length === 0 && (
-            <p className="micro-label py-16 text-center">
+            <p className="micro-label flex min-h-64 items-center justify-center text-center">
               no messages — send one to watch the contract work
             </p>
           )}
@@ -337,7 +351,7 @@ export function ChatScreen() {
               </Message>
 
               {turn.result && <RunInspectors result={turn.result} />}
-              {turn.metadata && index === turns.length - 1 && (
+              {turn.metadata && (
                 <RunMetadata
                   metadata={turn.metadata}
                   usage={turn.usage}
@@ -360,8 +374,18 @@ export function ChatScreen() {
               className="field max-w-56 truncate"
               value={state.model}
               onChange={(event) => set('model', event.target.value)}
+              style={modelsError ? { borderColor: 'var(--skin-danger)' } : undefined}
+              // An empty picker has two very different causes. Saying which is
+              // the same courtesy every other read in this app extends.
+              title={
+                modelsError
+                  ? `the model list could not be read: ${modelsError.code} — ${modelsError.message}`
+                  : undefined
+              }
             >
-              <option value="">let LewLM route</option>
+              <option value="">
+                {modelsError ? 'model list unavailable' : 'let LewLM route'}
+              </option>
               {models.map((option) => (
                 // Models that cannot chat stay visible but unselectable — a
                 // test bench should show what exists and why it is unusable.
@@ -370,7 +394,7 @@ export function ChatScreen() {
                   key={option.id}
                   value={option.id}
                   disabled={!option.chatReady}
-                  title={option.reason ?? undefined}
+                  title={option.reason ? `${option.id} — ${option.reason}` : option.id}
                 >
                   {option.label}
                   {option.chatReady ? '' : ` — ${blockedLabel(option.reason)}`}
@@ -410,14 +434,17 @@ export function ChatScreen() {
             </select>
           </Labelled>
 
+          {/* The value is the text as typed; the bounds are applied by
+              buildRequest on send, so the field can be emptied and retyped. */}
           <Labelled label="max tokens">
             <input
               className="field numeric w-20"
               type="number"
-              min={1}
-              max={4096}
+              min={MAX_TOKENS.min}
+              max={MAX_TOKENS.max}
+              placeholder={String(MAX_TOKENS.fallback)}
               value={state.maxTokens}
-              onChange={(event) => set('maxTokens', Number(event.target.value))}
+              onChange={(event) => set('maxTokens', event.target.value)}
             />
           </Labelled>
 
@@ -425,11 +452,12 @@ export function ChatScreen() {
             <input
               className="field numeric w-20"
               type="number"
-              min={0}
-              max={2}
+              min={TEMPERATURE.min}
+              max={TEMPERATURE.max}
               step={0.1}
+              placeholder={String(TEMPERATURE.fallback)}
               value={state.temperature}
-              onChange={(event) => set('temperature', Number(event.target.value))}
+              onChange={(event) => set('temperature', event.target.value)}
             />
           </Labelled>
         </div>
@@ -527,27 +555,20 @@ export function ChatScreen() {
             />
           ))}
 
-          <label className="chip cursor-pointer">
-            attach
-            <input
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                const chosen = [...(event.target.files ?? [])];
-                setAttachments((current) => [
-                  ...current,
-                  // The part name is the join between the JSON body and the
-                  // multipart part; it only has to be unique within a request.
-                  ...chosen.map((file, index) => ({
-                    uploadName: `upload_${current.length + index}`,
-                    file,
-                  })),
-                ]);
-                event.target.value = '';
-              }}
-            />
-          </label>
+          <FilePicker
+            label="attach"
+            className="chip"
+            multiple
+            onFiles={(chosen) => {
+              // The part name is the join between the JSON body and the
+              // multipart part; it only has to be unique within a request.
+              const staged = chosen.map((file) => ({
+                uploadName: `upload_${nextUpload.current++}`,
+                file,
+              }));
+              setAttachments((current) => [...current, ...staged]);
+            }}
+          />
 
           {attachments.map((attachment) => (
             <button
@@ -742,30 +763,46 @@ function RunMetadata({
   );
 }
 
-function ErrorBanner({ error }: { error: LewLMApiError }) {
+/**
+ * Anything the send path threw.
+ *
+ * `LewLMApiError` is the expected case and gets the full envelope treatment. A
+ * plain `Error` is a bug in Chap, and saying so is the honest report — this used
+ * to be cast to `LewLMApiError` unconditionally, and reading `.fields` off a
+ * value that had none is what turned a two-line naming bug into a blank page.
+ */
+function ErrorBanner({ error }: { error: Error }) {
+  const api = error instanceof LewLMApiError ? error : null;
+
   return (
     <div
       className="panel"
       style={{ borderColor: 'var(--skin-danger)', color: 'var(--skin-danger)' }}
+      role="alert"
     >
       <div className="micro-label" style={{ color: 'var(--skin-danger)' }}>
-        {error.code} · {error.status || 'no response'}
+        {api ? `${api.code} · ${api.status || 'no response'}` : 'chap error · no request made'}
       </div>
       <p className="mt-1 text-sm" style={{ color: 'var(--skin-ink)' }}>
         {error.message}
       </p>
-      {error.fields.length > 0 && (
+      {api && api.fields.length > 0 && (
         <div className="mt-2 flex flex-col gap-1">
-          {error.fields.map((field, index) => (
+          {api.fields.map((field, index) => (
             <p key={index} className="numeric">
               {field.field}: {field.message}
             </p>
           ))}
         </div>
       )}
-      {error.synthesized && (
+      {api?.synthesized && (
         <p className="micro-label mt-2">
           LewLM returned no error envelope — Chap synthesized this. See docs/lewlm-gaps.md#g11
+        </p>
+      )}
+      {!api && (
+        <p className="micro-label mt-2">
+          This is a fault in Chap, not a response from LewLM.
         </p>
       )}
     </div>

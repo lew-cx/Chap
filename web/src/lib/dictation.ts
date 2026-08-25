@@ -142,6 +142,14 @@ export class Recorder {
   private node: AudioWorkletNode | null = null;
   private frames: Float32Array[] = [];
   private peak = 0;
+  /**
+   * Which attempt is live. `start()` awaits twice — permission, then the worklet
+   * module — and a press-and-release shorter than either await used to land in a
+   * torn-down recorder and go on opening a microphone nobody would ever close.
+   * Bumped by every start and every teardown, so any attempt can tell whether it
+   * is still the current one.
+   */
+  private generation = 0;
 
   static get supported(): boolean {
     return (
@@ -152,14 +160,23 @@ export class Recorder {
 
   /** Open the microphone and begin collecting. Throws what the browser threw. */
   async start(): Promise<void> {
+    const mine = ++this.generation;
     this.frames = [];
     this.peak = 0;
 
     // Echo cancellation matters here specifically: spoken replies are playing out
     // of the same machine's speakers, and without it the model hears itself.
-    this.stream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
+
+    // Released before permission resolved. The stream still opened, so stopping
+    // its tracks here is the only thing that turns the recording indicator off.
+    if (mine !== this.generation) {
+      for (const track of stream.getTracks()) track.stop();
+      return;
+    }
+    this.stream = stream;
 
     const context = new AudioContext({ sampleRate: TARGET_RATE });
     this.context = context;
@@ -174,9 +191,12 @@ export class Recorder {
       URL.revokeObjectURL(url);
     }
 
-    // The window between `start()` being called and the module resolving is real,
-    // and a release inside it lands here with everything already torn down.
-    if (this.context !== context) return;
+    // The second window: released while the worklet module was loading.
+    if (mine !== this.generation) {
+      void context.close().catch(() => undefined);
+      for (const track of stream.getTracks()) track.stop();
+      return;
+    }
 
     const node = new AudioWorkletNode(context, 'chap-tap');
     node.port.onmessage = (event: MessageEvent<Float32Array>) => {
@@ -187,7 +207,7 @@ export class Recorder {
     };
     this.node = node;
 
-    context.createMediaStreamSource(this.stream).connect(node);
+    context.createMediaStreamSource(stream).connect(node);
     // A worklet only runs while it is reachable from the destination, and this
     // one emits nothing, so connecting it cannot be heard.
     node.connect(context.destination);
@@ -236,6 +256,9 @@ export class Recorder {
   }
 
   private teardown(): void {
+    // Invalidates any `start()` still waiting on a promise, so it releases what
+    // it opened instead of installing it into a recorder that is already closed.
+    this.generation += 1;
     this.frames = [];
     this.peak = 0;
     if (this.node) {

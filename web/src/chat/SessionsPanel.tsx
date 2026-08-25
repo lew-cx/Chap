@@ -11,15 +11,23 @@
  * becomes LewLM's job, which is the whole reason sessions exist.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { SessionListResponse, SessionRecord, SessionContextPolicy } from '@chap/lewlm';
 
+import { ConfirmButton } from '../components/ConfirmButton.tsx';
 import { Labelled } from '../components/Field.tsx';
 import { lewlm } from '../lib/client.ts';
 import { usePolled } from '../lib/usePolled.ts';
 
 const POLICIES: SessionContextPolicy[] = ['full_history', 'last_turn', 'summary_and_last_turn'];
+
+/**
+ * Sessions accumulate, and this panel opens inside a composer drawer. Without a
+ * limit the drawer rendered every session on the host — over a hundred rows,
+ * each with its own `<select>` — to show the handful anyone is looking for.
+ */
+const PAGE = 25;
 
 interface Props {
   /** The attached session, or null when Chap is sending its own transcript. */
@@ -28,12 +36,23 @@ interface Props {
 }
 
 export function SessionsPanel({ sessionId, onAttach }: Props) {
-  const { data, refresh } = usePolled<SessionListResponse>('/v1/sessions');
+  const { data, refresh } = usePolled<SessionListResponse>(`/v1/sessions?limit=${PAGE * 8}`);
   const [title, setTitle] = useState('');
   const [policy, setPolicy] = useState<SessionContextPolicy>('full_history');
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
+  const [shown, setShown] = useState(PAGE);
 
-  const sessions = data?.items ?? [];
+  const all = data?.items ?? [];
+  const needle = search.trim().toLowerCase();
+  const matching = needle
+    ? all.filter(
+        (session) =>
+          (session.title ?? '').toLowerCase().includes(needle) ||
+          session.session_id.toLowerCase().includes(needle),
+      )
+    : all;
+  const sessions = matching.slice(0, shown);
 
   const act = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -93,12 +112,27 @@ export function SessionsPanel({ sessionId, onAttach }: Props) {
             detach
           </button>
         )}
+
+        <Labelled label="find">
+          <input
+            className="field w-48"
+            value={search}
+            placeholder="title or id"
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setShown(PAGE);
+            }}
+          />
+        </Labelled>
       </div>
 
-      {sessions.length === 0 && (
+      {all.length === 0 && (
         <p className="micro-label">
           no sessions — Chap is sending its own transcript as `messages`
         </p>
+      )}
+      {all.length > 0 && matching.length === 0 && (
+        <p className="micro-label">no session matches “{search}”</p>
       )}
 
       <div className="flex flex-col">
@@ -109,10 +143,24 @@ export function SessionsPanel({ sessionId, onAttach }: Props) {
             attached={session.session_id === sessionId}
             busy={busy}
             onAttach={() => onAttach(session.session_id)}
+            onDeleted={() => {
+              // The row goes; the composer's session_id would not, and the next
+              // send would carry a session LewLM no longer has.
+              if (session.session_id === sessionId) onAttach(null);
+            }}
             onAct={act}
           />
         ))}
       </div>
+
+      {matching.length > sessions.length && (
+        <div>
+          <button type="button" className="chip" onClick={() => setShown((count) => count + PAGE)}>
+            show {Math.min(PAGE, matching.length - sessions.length)} more · {sessions.length} of{' '}
+            {matching.length}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -122,16 +170,20 @@ function SessionRow({
   attached,
   busy,
   onAttach,
+  onDeleted,
   onAct,
 }: {
   session: SessionRecord;
   attached: boolean;
   busy: boolean;
   onAttach: () => void;
+  onDeleted: () => void;
   onAct: (work: () => Promise<unknown>) => Promise<void>;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(session.title ?? '');
+  /** Set by Escape so the blur that follows knows not to save. */
+  const abandon = useRef(false);
 
   const patch = (body: Record<string, unknown>) =>
     onAct(() =>
@@ -157,20 +209,35 @@ function SessionRow({
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              setRenaming(false);
-              void patch({ title: draft || null });
+            if (event.key === 'Enter') event.currentTarget.blur();
+            if (event.key === 'Escape') {
+              abandon.current = true;
+              event.currentTarget.blur();
             }
-            if (event.key === 'Escape') setRenaming(false);
           }}
-          onBlur={() => setRenaming(false)}
+          // Committing on blur, not discarding. Clicking away from a field you
+          // have just typed into means "done", not "throw that away" — which is
+          // what it used to mean, silently.
+          onBlur={() => {
+            setRenaming(false);
+            const abandoned = abandon.current;
+            abandon.current = false;
+            if (abandoned) {
+              setDraft(session.title ?? '');
+              return;
+            }
+            if (draft !== (session.title ?? '')) void patch({ title: draft || null });
+          }}
         />
       ) : (
         <button
           type="button"
           className="min-w-0 flex-1 truncate text-left text-sm"
-          onDoubleClick={() => setRenaming(true)}
-          onClick={() => setRenaming(true)}
+          title="rename"
+          onClick={() => {
+            setDraft(session.title ?? '');
+            setRenaming(true);
+          }}
         >
           {session.title || <span style={{ color: 'var(--skin-faint)' }}>untitled</span>}
         </button>
@@ -203,16 +270,18 @@ function SessionRow({
         export
       </a>
 
-      <button
-        type="button"
-        className="chip"
+      <ConfirmButton
+        label="delete"
+        confirmLabel="delete for good?"
         disabled={busy}
-        onClick={() =>
-          void onAct(() => lewlm.request('DELETE', `/v1/sessions/${session.session_id}`))
+        title="deletes the session and its history in LewLM; there is no undo"
+        onConfirm={() =>
+          void onAct(async () => {
+            await lewlm.request('DELETE', `/v1/sessions/${session.session_id}`);
+            onDeleted();
+          })
         }
-      >
-        delete
-      </button>
+      />
     </div>
   );
 }
