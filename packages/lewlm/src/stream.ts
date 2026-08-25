@@ -43,6 +43,11 @@ export type ChatStreamEvent =
   /** Terminal payload: everything LewLM only knows once generation finished. */
   | {
       type: 'final';
+      /**
+       * LewLM's own word for why generation stopped, on the surface that says.
+       * `/v1/responses` publishes none — see docs/lewlm-gaps.md#g32 — so it is
+       * `null` there rather than a `'stop'` this package would be inventing.
+       */
       finishReason: string | null;
       citations: GeneratedCitationReference[];
       metadata: ExecutionMetadata | null;
@@ -110,6 +115,7 @@ export async function* streamChat(
   );
 
   let opened = false;
+  let completed = false;
 
   for await (const frame of readSSE(res)) {
     if (frame.data === '[DONE]') {
@@ -137,6 +143,7 @@ export async function* streamChat(
     // The chunk bearing a finish_reason also carries citations, metadata and
     // structured output. It arrives before `[DONE]`.
     if (choice?.finish_reason != null) {
+      completed = true;
       yield {
         type: 'final',
         finishReason: choice.finish_reason,
@@ -150,8 +157,14 @@ export async function* streamChat(
     }
   }
 
-  // LewLM always terminates with `[DONE]`; EOF before it is a dropped response,
-  // not a successful partial answer.
+  // LewLM always terminates with `[DONE]`, but a run that already reported its
+  // own completion is not a dropped response — a degenerate generation ends the
+  // stream this way, and calling that "could not reach LewLM" blames the
+  // environment for something the environment did not do.
+  if (completed) {
+    yield { type: 'done' };
+    return;
+  }
   throw connectionError(new Error('Chat stream ended before its [DONE] marker.'));
 }
 
@@ -168,6 +181,7 @@ export async function* streamResponses(
   );
 
   let opened = false;
+  let completed = false;
 
   for await (const frame of readSSE(res)) {
     if (frame.data === '[DONE]') {
@@ -188,9 +202,13 @@ export async function* streamResponses(
     // `/v1/responses` signals completion with `done`, where chat uses
     // `finish_reason`. Same terminal payload either way.
     if (chunk.done) {
+      completed = true;
       yield {
         type: 'final',
-        finishReason: 'stop',
+        // `ResponseChunk` carries no finish reason, so a length-truncated reply
+        // is indistinguishable from a complete one on this surface. Reported as
+        // unknown rather than as a `'stop'` this package would be inventing.
+        finishReason: null,
         citations: chunk.citations ?? [],
         metadata: chunk.metadata ?? null,
         structuredOutput: chunk.structured_output ?? null,
@@ -201,6 +219,10 @@ export async function* streamResponses(
     }
   }
 
+  if (completed) {
+    yield { type: 'done' };
+    return;
+  }
   throw connectionError(new Error('Responses stream ended before its [DONE] marker.'));
 }
 
@@ -274,7 +296,9 @@ async function* replayResponse(
   if (response.output_text) yield { type: 'text', delta: response.output_text };
   yield {
     type: 'final',
-    finishReason: 'stop',
+    // Same gap as the streaming surface: `/v1/responses` publishes no finish
+    // reason on either transport.
+    finishReason: null,
     citations: response.citations ?? [],
     metadata: response.metadata,
     structuredOutput: response.structured_output ?? null,

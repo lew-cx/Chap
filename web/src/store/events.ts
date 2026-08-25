@@ -30,7 +30,22 @@ import { lewlm } from '../lib/client.ts';
 const CAPACITY = 5_000;
 const FLUSH_MS = 100;
 
-/** A ring entry. `gap` marks a reconnect, where events were lost. */
+/**
+ * The two markers Chap mints for holes in the timeline.
+ *
+ * Neither is LewLM's: both are things that happened to the subscription rather
+ * than to the service, which is why they are cast into the contract's union
+ * rather than generated from it. Named here so the row that draws them and the
+ * code that pushes them cannot disagree about which is which.
+ */
+export const GAP_TYPES = {
+  /** LewLM cannot replay, so the window between drop and reconnect is gone. */
+  reconnected: 'stream.reconnected',
+  /** Pausing the view does not pause the stream; a resume loses a window too. */
+  resumed: 'stream.resumed',
+} as const;
+
+/** A ring entry. `gap` marks a hole in the timeline, where events were lost. */
 export interface EventRecord {
   seq: number;
   event: StreamEvent;
@@ -44,6 +59,8 @@ interface EventState {
   received: number;
   dropped: number;
   paused: boolean;
+  /** Events discarded since the pause began, so resuming can say how many. */
+  pausedDropped: number;
   /**
    * Sent to LewLM. Changing it reopens the stream, which is why it lives here
    * rather than in a screen. The events explorer sets it while it is open and
@@ -59,14 +76,34 @@ let seq = 0;
 let pending: EventRecord[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-export const useEvents = create<EventState>((set) => ({
+export const useEvents = create<EventState>((set, get) => ({
   events: [],
   status: 'connecting',
   received: 0,
   dropped: 0,
   paused: false,
+  pausedDropped: 0,
   filter: {},
-  setPaused: (paused) => set({ paused }),
+
+  setPaused: (paused) => {
+    const missed = paused ? 0 : get().pausedDropped;
+    set({ paused, pausedDropped: 0 });
+
+    // Resuming leaves a hole, exactly as a reconnect does, so it gets the same
+    // marker. Pretending the timeline was continuous is the one thing this
+    // buffer is not allowed to do.
+    if (missed > 0) {
+      push({
+        gap: true,
+        event: {
+          type: GAP_TYPES.resumed as StreamEvent['type'],
+          created_at: new Date().toISOString(),
+          payload: { detail: `${missed} events arrived while paused and were not kept` },
+        },
+      });
+    }
+  },
+
   setFilter: (filter) => set({ filter }),
   clear: () => set({ events: [], dropped: 0 }),
 }));
@@ -78,7 +115,16 @@ function flush() {
   pending = [];
 
   useEvents.setState((state) => {
-    if (state.paused) return { received: state.received + batch.length };
+    if (state.paused) {
+      // The stream does not stop for a paused view, and these events are gone.
+      // Counted as dropped so the "aged out" readout accounts for them instead
+      // of quietly under-reporting what the buffer holds.
+      return {
+        received: state.received + batch.length,
+        dropped: state.dropped + batch.length,
+        pausedDropped: state.pausedDropped + batch.length,
+      };
+    }
     const merged = [...state.events, ...batch];
     const overflow = Math.max(0, merged.length - CAPACITY);
     return {
@@ -100,13 +146,22 @@ function push(record: Omit<EventRecord, 'seq'>) {
  */
 export function startEventStream(): () => void {
   let controller = new AbortController();
+  /*
+   * A deliberate reopen has two connections alive for a moment. The outgoing one
+   * signs off with `closed`, which would land after the incoming one has already
+   * said `connecting` — and flick the status dot to danger on an ordinary filter
+   * change. Only the newest connection is allowed to set the status.
+   */
+  let generation = 0;
 
   const connect = (filter: EventFilter) => {
+    const mine = ++generation;
     void subscribeEvents(lewlm, {
       signal: controller.signal,
       filter,
       onEvent: (event) => push({ event }),
       onStatus: (status, detail) => {
+        if (mine !== generation) return;
         useEvents.setState({ status });
         if (status === 'reconnected') {
           // LewLM cannot replay, so say so in the stream itself rather than
@@ -114,7 +169,7 @@ export function startEventStream(): () => void {
           push({
             gap: true,
             event: {
-              type: 'stream.reconnected' as StreamEvent['type'],
+              type: GAP_TYPES.reconnected as StreamEvent['type'],
               created_at: new Date().toISOString(),
               payload: { detail: detail ?? 'events between the drop and now were lost' },
             },

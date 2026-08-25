@@ -6,7 +6,7 @@
  * rendering of the same data.
  */
 
-import type { EventRecord } from '../store/events.ts';
+import { GAP_TYPES, type EventRecord } from '../store/events.ts';
 
 /** Colour by outcome, not by subsystem. Failures must be findable at a glance. */
 export function eventTone(type: string): string {
@@ -31,16 +31,29 @@ export function EventRow({
   const { event } = record;
 
   if (record.gap) {
-    // LewLM cannot replay (docs/lewlm-gaps.md#g13), so a reconnect leaves a real
-    // hole in the timeline. Drawing it is the honest thing to do.
+    /*
+     * A real hole in the timeline. Drawing it is the honest thing to do.
+     *
+     * There are two ways to make one and they are not the same event: LewLM
+     * cannot replay (docs/lewlm-gaps.md#g13), so a reconnect loses its window;
+     * and pausing this view does not pause the stream, so a resume loses one
+     * too. The marker says which, from the record rather than from a constant —
+     * labelling a pause as a reconnect would be a small lie in the one place
+     * this app exists to tell the truth.
+     */
+    const detail = String(event.payload?.['detail'] ?? '');
     return (
       <div
         className="numeric flex items-center gap-2 px-2"
         style={{ color: 'var(--skin-warn)' }}
-        title={String(event.payload?.detail ?? '')}
+        title={detail}
       >
         <span>⎯⎯</span>
-        <span>reconnected — events in this window were lost</span>
+        <span className="min-w-0 truncate">
+          {String(event.type) === GAP_TYPES.resumed
+            ? `resumed — ${detail || 'events while paused were not kept'}`
+            : `reconnected — ${detail || 'events in this window were lost'}`}
+        </span>
         <span className="flex-1 border-t" style={{ borderColor: 'var(--skin-warn)' }} />
       </div>
     );

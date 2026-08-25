@@ -50,6 +50,26 @@ export interface EventSubscription {
 const FIRST_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 10_000;
 
+/**
+ * Sleep, but wake the moment the caller aborts.
+ *
+ * A bare `setTimeout` promise does not notice the signal, so a teardown during a
+ * ten-second backoff was not acted on for up to ten more seconds — long enough
+ * for a filter change to look like a hung connection.
+ */
+function backoff(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal.addEventListener('abort', finish, { once: true });
+  });
+}
+
 /** Repeatable query parameters, which `RequestOptions.query` cannot express. */
 function search(filter: EventFilter | undefined): string {
   const params = new URLSearchParams();
@@ -89,7 +109,7 @@ export async function subscribeEvents(
     }
 
     if (signal.aborted) break;
-    await new Promise((resolve) => setTimeout(resolve, retry));
+    await backoff(retry, signal);
     retry = Math.min(retry * 2, MAX_RETRY_MS);
   }
 

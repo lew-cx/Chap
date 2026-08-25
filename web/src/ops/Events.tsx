@@ -22,7 +22,7 @@ import { EVENT_TYPES } from '@chap/lewlm';
 
 import { EventRow, eventTone } from '../components/EventRow.tsx';
 import { Json } from '../components/Json.tsx';
-import { Section } from '../components/Screen.tsx';
+import { Empty, Section } from '../components/Screen.tsx';
 import { VirtualList } from '../components/VirtualList.tsx';
 import { useEvents, type EventRecord } from '../store/events.ts';
 
@@ -75,8 +75,15 @@ export function Events() {
           ? { types: EVENT_TYPES.filter((name) => !name.startsWith('token.')) }
           : {},
     );
-    return () => setFilter({});
   }, [type, hideTokens, setFilter]);
+
+  /*
+   * Giving it back is a separate effect, and deliberately so. Cleaning up in the
+   * effect above ran on every change to the filter, not just on close: it set
+   * `{}` and then the narrowed value, and the stream was torn down and rebuilt
+   * twice for one press of "hide token.delta".
+   */
+  useEffect(() => () => setFilter({}), [setFilter]);
 
   /** Types actually seen, so the picker reflects this host rather than the spec. */
   const seen = useMemo(() => {
@@ -93,8 +100,12 @@ export function Events() {
     const link = document.createElement('a');
     link.href = url;
     link.download = `chap-events-${Date.now()}.ndjson`;
+    // In the document, and revoked a turn later. A detached anchor is ignored by
+    // some browsers, and revoking in the same tick races the download itself.
+    document.body.append(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   return (
@@ -148,7 +159,9 @@ export function Events() {
         </div>
       </Section>
 
-      <div className="flex min-h-0 flex-1 gap-4" style={{ height: '28rem' }}>
+      {/* Takes the height the screen body has left rather than a fixed 28rem,
+          which left a third of a tall window empty and clipped a short one. */}
+      <div className="flex min-h-96 min-w-0 flex-1 gap-4">
         <div className="panel-bare min-w-0 flex-1 py-1">
           <VirtualList items={filtered} rowHeight={20} follow={!paused} className="h-full">
             {(record) => (
@@ -161,7 +174,7 @@ export function Events() {
           </VirtualList>
         </div>
 
-        <div className="scroll-thin w-96 shrink-0 overflow-y-auto">
+        <div className="scroll-thin flex w-96 shrink-0 flex-col overflow-y-auto">
           {selected ? (
             <>
               <h3 className="micro-label mb-2" style={{ color: eventTone(selected.event.type) }}>
@@ -170,7 +183,7 @@ export function Events() {
               <Json value={selected.event} maxHeight="24rem" />
             </>
           ) : (
-            <p className="micro-label">select an event to inspect its payload</p>
+            <Empty>select an event to inspect its payload</Empty>
           )}
         </div>
       </div>
