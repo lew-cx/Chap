@@ -13,14 +13,26 @@
  * non-zero only on FAIL.
  */
 
+import { writeFileSync } from 'node:fs';
+
 export type Status = 'PASS' | 'FAIL' | 'GAP' | 'FIXED' | 'SKIP';
 
-const results: { status: Status; name: string; note: string }[] = [];
+export interface Result {
+  status: Status;
+  name: string;
+  note: string;
+  /** The gap id, on entries that have one. Absent on plain checks. */
+  id?: string;
+}
 
-export function record(status: Status, name: string, note = '') {
-  results.push({ status, name, note });
+const results: Result[] = [];
+
+export function record(status: Status, name: string, note = '', id?: string) {
+  results.push(id ? { status, name, note, id } : { status, name, note });
   const mark = { PASS: ' ok ', FAIL: 'FAIL', GAP: 'gap ', FIXED: 'FIXD', SKIP: 'skip' }[status];
-  console.log(`  [${mark}] ${name}${note ? `  ${note}` : ''}`);
+  // The id stays a field as well as part of the line: the line is for reading,
+  // the field is what `npm run gen:gaps` builds the Settings screen from.
+  console.log(`  [${mark}] ${id ? `${id} ` : ''}${name}${note ? `  ${note}` : ''}`);
 }
 
 export async function check(name: string, fn: () => Promise<string | void>) {
@@ -39,27 +51,60 @@ export async function gap(id: string, name: string, expectBroken: () => Promise<
   try {
     const note = await expectBroken();
     if (note === null) {
-      record('FIXED', `${id} ${name}`, 'fixed upstream — Chap can drop its workaround');
+      record('FIXED', name, 'fixed upstream — Chap can drop its workaround', id);
     } else {
-      record('GAP', `${id} ${name}`, note);
+      record('GAP', name, note, id);
     }
   } catch (error) {
-    record('FAIL', `${id} ${name}`, error instanceof Error ? error.message : String(error));
+    record('FAIL', name, error instanceof Error ? error.message : String(error), id);
   }
 }
 
-/** Print the score line and exit. The line is copied verbatim into a gaps doc. */
+export interface ProofRun {
+  ranAt: string;
+  passed: number;
+  failed: number;
+  gaps: number;
+  fixed: number;
+  results: Result[];
+}
+
+/** The run as data, which is what the gap screen is generated from. */
+export function summary(): ProofRun {
+  const count = (status: Status) => results.filter((result) => result.status === status).length;
+  return {
+    ranAt: new Date().toISOString(),
+    passed: count('PASS'),
+    failed: count('FAIL'),
+    gaps: count('GAP'),
+    fixed: count('FIXED'),
+    results: [...results],
+  };
+}
+
+/**
+ * Print the score line and exit. The line is copied verbatim into a gaps doc.
+ *
+ * `--emit <path>` also writes the run as JSON. That is what `npm run gen:gaps`
+ * reads, so the Settings screen reports a real run rather than a hand-kept list
+ * that drifts away from one.
+ */
 export function summarize(): never {
-  const failed = results.filter((r) => r.status === 'FAIL').length;
-  const gaps = results.filter((r) => r.status === 'GAP').length;
-  const fixed = results.filter((r) => r.status === 'FIXED').length;
+  const run = summary();
 
   console.log(
-    `\n  ${results.filter((r) => r.status === 'PASS').length} passed · ${failed} failed · ` +
-      `${gaps} gaps confirmed · ${fixed} gaps fixed upstream\n`,
+    `\n  ${run.passed} passed · ${run.failed} failed · ` +
+      `${run.gaps} gaps confirmed · ${run.fixed} gaps fixed upstream\n`,
   );
-  if (fixed > 0) console.log('  A FIXD line means Chap can now delete a workaround.\n');
-  process.exit(failed > 0 ? 1 : 0);
+  if (run.fixed > 0) console.log('  A FIXD line means Chap can now delete a workaround.\n');
+
+  const target = flag('emit', '');
+  if (target) {
+    writeFileSync(target, `${JSON.stringify(run, null, 2)}\n`);
+    console.log(`  run written to ${target}\n`);
+  }
+
+  process.exit(run.failed > 0 ? 1 : 0);
 }
 
 /** `--name value` off argv, with a fallback. Every proof takes flags this way. */

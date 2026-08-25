@@ -19,10 +19,11 @@
     "build": "npm run build --workspace @chap/web",
     "start": "npm run start --workspace @chap/server",
     "gen:types": "node scripts/gen-types.mjs",
+    "gen:gaps": "node scripts/gen-gaps.mjs",
     "loc:budget": "node scripts/loc-budget.mjs",
     "module:check": "node scripts/module-check.mjs",
-    "proof": "tsx scripts/proof.ts",
-    "proof:dk": "tsx packages/module-docktizo/proof.ts",
+    "proof": "tsx --env-file-if-exists=.env scripts/proof.ts",
+    "proof:dk": "tsx --env-file-if-exists=.env packages/module-docktizo/proof.ts",
     "test": "tsx --test packages/lewlm/src/stream.test.ts packages/module-collections/src/vectors.test.ts web/src/lib/sentences.test.ts web/src/lib/dictation.test.ts",
     "typecheck": "tsc -b --pretty",
     "skin:check": "node scripts/skin-check.mjs"

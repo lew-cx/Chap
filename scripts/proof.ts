@@ -713,7 +713,7 @@ async function main() {
 
   console.log('');
 
-  await gap('G13', '/v1/events cannot be resumed after a drop', async () => {
+  await gap('G13', '/v1/events can be resumed after a drop', async () => {
     // Filtering landed; replay did not. A frame carries no `id:`, so there is no
     // cursor to send back — `Last-Event-ID` has nothing to name even if the
     // route read it. DocKtizo's generation stream puts its paged cursor on every
@@ -830,6 +830,22 @@ async function main() {
     if (!operation) return 'no transcriptions operation in the contract at all';
     if (operation.requestBody) return null;
     return 'operation declares no requestBody; the multipart fields are hand-written, not generated';
+  });
+
+  await gap('G33', 'speech formats are published, not guessed', async () => {
+    // The same question G27 answered for voices. `format` is typed as a bare
+    // string that defaults to `wav`, so Chap's four-value picker is a guess.
+    const contract = await fetch(`${BASE}/v1/openapi.json`);
+    if (!contract.ok) return `GET /v1/openapi.json -> ${contract.status}`;
+    const document = (await contract.json()) as {
+      components?: {
+        schemas?: Record<string, { properties?: Record<string, { enum?: unknown[] }> }>;
+      };
+    };
+    const field = document.components?.schemas?.['AudioSpeechCreateRequest']?.properties?.['format'];
+    if (!field) return 'AudioSpeechCreateRequest.format is not in the contract at all';
+    if (Array.isArray(field.enum) && field.enum.length > 0) return null;
+    return 'format is a bare string; the accepted values are not discoverable from the contract';
   });
 
   await gap('G27', 'synthesis voices can be listed', async () => {
@@ -1001,6 +1017,22 @@ async function main() {
    * the bounds it compiles inside that ceiling and reports the ones it left to
    * post-generation validation, so the probe asserts an answer, not a survivor.
    */
+  await gap('G32', '/v1/responses reports a finish reason', async () => {
+    // Chap normalizes both surfaces onto one event union, and the chat half of
+    // that union carries `finish_reason`. If this surface never does, a reply cut
+    // off at max_output_tokens is indistinguishable from a complete one.
+    if (!modelId) return 'no chat-ready model to run a response against';
+    const res = await client.request<Record<string, unknown>>('POST', '/v1/responses', {
+      json: { model: modelId, input: [{ role: 'user', content: 'Say ok.' }], max_output_tokens: 8 },
+    });
+    if (typeof res['finish_reason'] === 'string') return null;
+    const output = res['output'];
+    if (Array.isArray(output) && output.some((part) => typeof part?.['finish_reason'] === 'string')) {
+      return null;
+    }
+    return 'the terminal payload carries no finish_reason, so truncation is invisible on this surface';
+  });
+
   await gap('G30', 'a caller-supplied maxLength is answered, not fatal', async () => {
     // Only a runtime that compiles a grammar could be killed by one. The MLX
     // path is prompt-guided and survives anything, so probing it proves nothing.

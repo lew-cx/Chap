@@ -16,14 +16,20 @@ deleted.
 Verified against LewLM `0.4.2` on 2026-08-24, after `POST /v1/models/scan`.
 
 ```
-  24 passed · 0 failed · 3 gaps confirmed · 17 gaps fixed upstream
+  24 passed · 0 failed · 5 gaps confirmed · 17 gaps fixed upstream
 ```
 
-**G31 is closed, and G13 is half closed.** The two remaining `gap` lines are not
+The Settings → Gaps screen is generated from this run by `npm run gen:gaps`, so
+it cannot claim a gap the proof does not confirm or miss one it does. It used to
+be a hand-kept array and had drifted from both this document and the proof.
+
+**G31 is closed, and G13 is half closed.** Two of the five `gap` lines are not
 contract gaps: G1 reports that this server was started without CORS, and G5 that
 the runtime Chap routed to honors none of the sampling controls it was sent — the
-contract reports both faithfully, which is the behaviour each asked for. G13 is
-the only entry still open.
+contract reports both faithfully, which is the behaviour each asked for. G13, G32
+and G33 are the entries still open, and the last two are new: both were found by
+reading Chap's own code for places it had quietly filled in a value the contract
+does not publish.
 
 G31 lasted about two hours. `src/lewlm/registry/gguf_header.py` now reads
 `<arch>.context_length` out of the GGUF header, so a rescan moved both bundles
@@ -101,6 +107,46 @@ types. `EVENT_TYPES` is generated from the contract, so Chap's list is exact and
 cannot drift — but it does mean the common case produces a 53-value query string.
 An `exclude_types` would collapse it. Recorded rather than filed, because the
 capability is there and this is only its shape.
+
+### G32 · `/v1/responses` publishes no finish reason
+
+**What Chap needs.** To tell a complete reply from a truncated one on both
+surfaces. `/v1/chat/completions` says so — `choices[0].finish_reason` carries
+`stop`, `length` or a tool stop — and Chap normalizes both surfaces onto one
+event union, so the field exists on the union either way.
+
+**What is missing.** `ResponseChunk` and `ResponseCreateResponse` carry no
+equivalent. A reply that ran out of `max_output_tokens` mid-sentence is
+indistinguishable from one that finished.
+
+**Proposed.** `finish_reason` on the terminal `ResponseChunk` and on the sync
+response, from the same vocabulary the chat surface already publishes.
+
+**Cost, as built.** One line, and it is the honest one: `finishReason` is `null`
+on this surface rather than the `'stop'` the package used to report. A constant
+that says "finished normally" for every outcome is worse than no value at all —
+it is Chap inventing an upstream's answer, which is the one thing this package
+does not do. Nothing in the UI reads the field yet, so the cost today is only
+that a truncation indicator cannot be built for `/v1/responses`.
+
+### G33 · the speech format vocabulary is not published
+
+**What Chap needs.** The audio formats this build can actually synthesize.
+
+**What is missing.** `AudioSpeechCreateRequest.format` is typed as a bare string
+that defaults to `wav`. The runtime accepts some set of values and the contract
+names none of them, so a picker has to be written from outside the contract.
+
+**Proposed.** An enum on the field, or the formats on
+`GET /v1/audio/voices` beside the voices — which is where the same question was
+answered for voices in G27, and the shape that worked.
+
+**Cost, as built.** `FORMATS = ['wav', 'mp3', 'flac', 'ogg']` in
+`web/src/lab/Audio.tsx` — four values Chap guessed. The guess is now labelled as
+one in the code and tracked here rather than passing for contract knowledge, and
+the control stays free-text so a format LewLM gained yesterday is still
+reachable. Small, but it is exactly the kind of hand-written list that G26 and
+G27 each removed once the contract reached far enough.
 
 ---
 
