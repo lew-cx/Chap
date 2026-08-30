@@ -229,6 +229,10 @@ LewLM now supports CORS, so talking to it directly works too — start it with
 cd ../LewLM
 .venv/bin/lewlm serve
 
+ #1. LewLM on windows
+cd ../LewLM
+docker compose --profile gpu up -d lewlm-cuda
+
 # 2. Chap
 npm install
 npm run gen:types      # reads LewLM's contract; no running server needed
