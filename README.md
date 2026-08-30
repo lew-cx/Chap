@@ -229,7 +229,7 @@ LewLM now supports CORS, so talking to it directly works too — start it with
 cd ../LewLM
 .venv/bin/lewlm serve
 
- #1. LewLM on windows
+ #1b. LewLM on windows
 cd ../LewLM
 docker compose --profile gpu up -d lewlm-cuda
 
