@@ -13,7 +13,8 @@ argument. Every entry has a probe in `npm run proof` that flips from `gap` to
 `FIXD` when LewLM gains the capability, which is how we learn a workaround can be
 deleted.
 
-Verified against LewLM `0.4.2` on 2026-08-24, after `POST /v1/models/scan`.
+Verified against LewLM `0.4.2` on 2026-08-24, after `POST /v1/models/scan`, on
+macOS. That last word matters more than it looks — see below.
 
 ```
   24 passed · 0 failed · 5 gaps confirmed · 17 gaps fixed upstream
@@ -22,6 +23,17 @@ Verified against LewLM `0.4.2` on 2026-08-24, after `POST /v1/models/scan`.
 The Settings → Gaps screen is generated from this run by `npm run gen:gaps`, so
 it cannot claim a gap the proof does not confirm or miss one it does. It used to
 be a hand-kept array and had drifted from both this document and the proof.
+
+**This score line is host-dependent, and the gap count is not.** The same proof
+on Windows reports `20 passed · 1 failed`, because LewLM serves audio only
+through `mlx_audio` and MLX is Apple silicon only, so the speech and
+transcription probes have no model to run against. It confirms the same **5
+gaps** and the same **17 fixed** — contract parity is identical — but `G27` reads
+open there for want of a synthesis model while `G5` reads fixed under a
+different runtime. Both are environment rather than contract, the same caveat
+made for `G1` below. `npm run gen:gaps` is only meaningful with every upstream
+running; it now refuses rather than writing gaps an incomplete host invented.
+See [cross-platform.md](cross-platform.md).
 
 **G31 is closed, and G13 is half closed.** Two of the five `gap` lines are not
 contract gaps: G1 reports that this server was started without CORS, and G5 that
