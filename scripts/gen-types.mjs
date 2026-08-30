@@ -30,7 +30,7 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -97,6 +97,31 @@ const BASE_URL = flag('base', TARGET === 'docktizo' ? 'http://127.0.0.1:8090' : 
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 
 /**
+ * Read a contract document as content rather than as bytes.
+ *
+ * `bundleSha256` and `openapiSha256` exist to name *which contract* the types
+ * were generated from. That only holds if the same upstream commit hashes the
+ * same everywhere, and a file read off disk does not: LewLM pins nothing in its
+ * `.gitattributes` beyond `text=auto`, so a Windows checkout with the default
+ * `core.autocrlf=true` writes `examples/integration-bundle.json` with CRLF. The
+ * JSON parses identically, every generated file comes out byte-identical — and
+ * the hash of the raw bytes does not, so `--check` reported drift on a clean
+ * tree and named `meta.ts` as the file that changed.
+ *
+ * That failure is worse than noise. The obvious response to it is to run
+ * `npm run gen:types`, which would write a CRLF-derived hash into the committed
+ * `meta.ts` and a CRLF `vendor/openapi.json` — turning a phantom on one platform
+ * into real drift on every other.
+ *
+ * So line endings are normalized where a document enters, not where it is
+ * hashed: the vendored snapshots this script writes are then LF on every
+ * platform too, which is the property that keeps the committed copies stable.
+ * DocKtizo needs none of this — it pins `eol=lf` — and is normalized anyway,
+ * because the guarantee should not depend on which upstream is being read.
+ */
+const asContract = (source) => source.replace(/\r\n/g, '\n');
+
+/**
  * Where a Python venv keeps its interpreter. POSIX puts it in `bin/`, Windows in
  * `Scripts/`, and looking in the wrong one reports "no venv" for a venv that is
  * sitting right there — a confusing first failure on a fresh machine.
@@ -141,7 +166,7 @@ async function resolveOpenapi() {
   const failures = [];
   for (const [name, load] of attempts) {
     try {
-      const raw = await load();
+      const raw = asContract(await load());
       console.log(`  openapi   <- ${name}`);
       return raw;
     } catch (error) {
@@ -308,7 +333,7 @@ async function buildEnums(bundle) {
 
 async function generate() {
   const bundlePath = join(LEWLM_HOME, 'examples/integration-bundle.json');
-  const bundleRaw = await readFile(bundlePath, 'utf8');
+  const bundleRaw = asContract(await readFile(bundlePath, 'utf8'));
   const bundle = JSON.parse(bundleRaw);
   if (bundle.bundle_format !== 'lewlm-integration-bundle-v1') {
     throw new Error(`unexpected bundle_format "${bundle.bundle_format}"`);
@@ -434,7 +459,7 @@ async function resolveFirst(label, attempts) {
   const failures = [];
   for (const [name, load] of attempts) {
     try {
-      const raw = await load();
+      const raw = asContract(await load());
       console.log(`  ${label.padEnd(9)} <- ${name}`);
       return raw;
     } catch (error) {
@@ -585,7 +610,14 @@ async function main() {
   if (fixtures.length > 0) {
     await mkdir(join(out, 'fixtures'), { recursive: true });
     for (const name of fixtures) {
-      await cp(join(LEWLM_HOME, 'examples', name), join(out, 'fixtures', name));
+      // Copied through `asContract` rather than `cp` for the same reason the
+      // documents above are read through it, and it is the copy that hides the
+      // problem better: `--check` compares generated files and never looks at
+      // fixtures, so a verbatim copy off a CRLF checkout leaves thirteen files
+      // modified in `git status` after every regeneration, with no gate saying
+      // why. The content is identical; only the spelling was upstream's.
+      const fixture = asContract(await readFile(join(LEWLM_HOME, 'examples', name), 'utf8'));
+      await writeFile(join(out, 'fixtures', name), fixture);
     }
   }
   // Snapshot so a machine without the upstream checkout can still regenerate.

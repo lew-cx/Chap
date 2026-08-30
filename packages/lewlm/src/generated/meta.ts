@@ -13,5 +13,5 @@ export const CONTRACT = {
   componentCount: 293,
   bundleSha256: "9bb321be09b09fa4de638779c32ca7a424304e52dbdc39b4f72d2c43ed2280f0",
   openapiSha256: "01f1c578eba3f36dc135e97dea4ab328d1778e83c6dffea97ecf4f16cf4c67da",
-  generatedAt: "2026-08-23T06:08:04.208Z",
+  generatedAt: "2026-08-27T15:30:01.794Z",
 } as const;
