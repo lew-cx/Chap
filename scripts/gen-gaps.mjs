@@ -133,6 +133,40 @@ function emit(runs) {
   ].join('\n');
 }
 
+/**
+ * Refuse to write a screen from a proof that never reached its upstream.
+ *
+ * A proof run against an absent service still emits a full result set, and it
+ * looks like evidence: `proof:dk` with DocKtizo down reports five FAILs whose
+ * note is `fetch failed`, then five GAPs noted `not verifiable without a
+ * working token`. Written out, those become five *open gaps against DocKtizo*
+ * on the Settings screen, and the suite line reads `0 passed · 5 failed`. The
+ * same run also flipped LewLM's G27 from fixed to open, because this host has
+ * no synthesis model it can load — the audio bundles here are `mlx_audio`, and
+ * MLX does not exist off Apple silicon.
+ *
+ * None of that is a fact about an upstream's contract. It is a fact about this
+ * machine, and the screen it would land on is the one a visitor reads to judge
+ * whether this project's central claim is honest. `--check` made it worse by
+ * telling whoever saw the drift to run `npm run gen:gaps`, which is exactly the
+ * command that publishes the false version.
+ *
+ * So: a suite that passed nothing proved nothing. Every proof opens by
+ * establishing liveness, so zero passing probes means the run never got far
+ * enough for its GAP lines to mean absence-of-capability rather than
+ * absence-of-service. That is refused rather than reported, which is the same
+ * rule Chap already applies to itself — it does not invent an upstream's
+ * answer, and an unreachable upstream has not given one.
+ */
+function unreachable(runs) {
+  return runs
+    .filter(({ run }) => run.passed === 0 && run.results.length > 0)
+    .map(({ script, run }) => {
+      const first = run.results.find((r) => r.status === 'FAIL') ?? run.results[0];
+      return `${script}: ${run.failed} failed, nothing passed — first was "${first.name}: ${first.note}"`;
+    });
+}
+
 const check = process.argv.includes('--check');
 const workDir = await mkdtemp(join(tmpdir(), 'chap-gaps-'));
 
@@ -142,6 +176,17 @@ try {
 
   const runs = [];
   for (const script of scripts) runs.push(await run(script, workDir));
+
+  const absent = unreachable(runs);
+  if (absent.length > 0) {
+    console.error('  a proof did not reach its upstream, so its gaps are not evidence:\n');
+    for (const line of absent) console.error(`    ${line}`);
+    console.error(
+      '\n  Start the service and run again. The gap module is left as it is —\n' +
+        '  regenerating from this run would publish gaps this machine invented.\n',
+    );
+    process.exit(1);
+  }
 
   const next = emit(runs);
   const current = await readFile(OUT, 'utf8').catch(() => '');

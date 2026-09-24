@@ -23,6 +23,14 @@ The Settings → Gaps screen is generated from this run by `npm run gen:gaps`, s
 it cannot claim a gap the proof does not confirm or miss one it does. It used to
 be a hand-kept array and had drifted from both this document and the proof.
 
+**The score line is host-dependent, and the gap count is not.** On the earlier
+2026-08-24 run the same proof on Windows reported `20 passed · 1 failed`, because
+LewLM serves audio only through `mlx_audio` and MLX is Apple silicon only, so the
+speech and transcription probes had no model to run against. Contract parity was
+identical. `npm run gen:gaps` is only meaningful with every upstream running; it
+refuses rather than writing gaps an incomplete host invented. See
+[cross-platform.md](cross-platform.md).
+
 The two remaining `gap` lines are environment/probe limitations, not missing
 LewLM contracts: G1 records that the fixture was intentionally started without
 CORS, and G30 cannot exercise llama.cpp decode-time grammar enforcement because
