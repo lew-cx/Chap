@@ -7,7 +7,7 @@
  * add. That way a new section in LewLM shows up here without a Chap change.
  */
 
-import type { CacheStats, RuntimeInfo, RuntimeStats } from '@chap/lewlm';
+import type { CacheStats, HealthResponse, RuntimeInfo, RuntimeStats } from '@chap/lewlm';
 
 import { Disclosure } from '../components/Disclosure.tsx';
 import { Stat } from '../components/Field.tsx';
@@ -22,6 +22,7 @@ export function Runtime() {
   const { data: info } = usePolled<RuntimeInfo>('/v1/runtime', 5000);
   const { data: stats } = usePolled<RuntimeStats>('/v1/runtime/stats', 4000);
   const { data: cache } = usePolled<CacheStats>('/v1/cache/stats', 8000);
+  const { data: health } = usePolled<HealthResponse>('/v1/health', 5000);
 
   const metrics = stats?.request_metrics;
   const hits = (cache?.cache_hits ?? 0) + (cache?.block_cache_hits ?? 0);
@@ -83,6 +84,20 @@ export function Runtime() {
         <Disclosure label="loaded models" hint={stats?.current_loaded_models ?? 0} open>
           <Json value={stats?.residencies ?? []} maxHeight="18rem" />
         </Disclosure>
+      </Section>
+
+      <Section title="startup and environment">
+        <div className="flex flex-col gap-2">
+          <Disclosure label="startup phases" hint={`${info?.startup?.engines?.length ?? 0} engines`} open>
+            <Json value={info?.startup} maxHeight="20rem" />
+          </Disclosure>
+          <Disclosure label="container and storage">
+            <Json value={{ container: health?.install_profiles.container, storage_access: health?.install_profiles.storage_access }} maxHeight="16rem" />
+          </Disclosure>
+          <Disclosure label="external endpoints">
+            <Json value={health?.install_profiles.external_endpoints ?? []} maxHeight="18rem" />
+          </Disclosure>
+        </div>
       </Section>
 
       {/* Everything else LewLM reports, unabridged. A section Chap does not know

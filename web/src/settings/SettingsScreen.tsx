@@ -141,11 +141,8 @@ function Modules() {
  * invented to fill the space.
  */
 const WORKAROUND_COST: Record<string, string> = {
-  G13: 'Every token.delta of every request would reach the browser if Chap did not narrow the stream at the server; the filtering half of this gap is closed and Chap depends on it. Replay is not: a reconnect leaves an explicit gap marker because the window cannot be recovered, and the 5,000-entry ring, the throttled flush and the virtualized list stay. The one open gap that costs Chap real code.',
   G1: 'An environment fact, not a contract gap. This server was started without CORS, so a browser cannot call LewLM directly and chap-server proxies every request. Chap would keep the proxy regardless — it is where the API key lives — so the cost here is zero and the probe exists to keep that honest.',
-  G5: 'Also environmental. The contract carries the sampling controls and reports them back faithfully; the runtime Chap routed to honors none of them. The composer sends them anyway and shows LewLM\'s own `sampling` report next to what was asked for, which is the only way to tell "ignored" from "applied" without guessing.',
-  G32: 'One line, and it is the honest one: the normalized event union reports `finishReason: null` on this surface rather than the `\'stop\'` it used to report for every outcome. A constant that says "finished normally" whatever happened is Chap inventing an upstream\'s answer. Nothing reads the field yet, so the cost today is that a truncation indicator cannot be built for /v1/responses.',
-  G33: 'A four-value list of audio formats hand-written in the lab against a field the contract types as a bare string. Labelled as a guess in the code rather than passing for contract knowledge, and the control stays free-text so a format LewLM gained yesterday is still reachable. Small, but exactly the kind of list G26 and G27 each removed once the contract reached far enough.',
+  G30: 'A fixture limitation, not a current contract gap. The fake bridge cannot exercise llama.cpp decode-time grammar enforcement; LewLM\'s real-runtime proof covers the fix.',
 };
 
 function Gaps() {

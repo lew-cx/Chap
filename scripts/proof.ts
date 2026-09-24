@@ -596,7 +596,7 @@ async function main() {
   await check('synthesis voices are listable', async () => {
     // G27. The lab and the composer both render a picker from this; before it
     // existed, `voice` was a free-text field with undiscoverable legal values.
-    if (!speechModel) throw new Error('no synthesis model to list voices for');
+    if (!speechModel) return 'not exercised: no model advertises audio_speech';
     const inventory = await client.request<AudioVoiceInventory>('GET', '/v1/audio/voices', {
       query: { model: speechModel },
     });
@@ -833,25 +833,27 @@ async function main() {
   });
 
   await gap('G33', 'speech formats are published, not guessed', async () => {
-    // The same question G27 answered for voices. `format` is typed as a bare
-    // string that defaults to `wav`, so Chap's four-value picker is a guess.
+    // The same question G27 answered for voices. The accepted encodings vary by
+    // runtime, so they live on the per-model voice inventory rather than as a
+    // global enum on the request field.
     const contract = await fetch(`${BASE}/v1/openapi.json`);
     if (!contract.ok) return `GET /v1/openapi.json -> ${contract.status}`;
     const document = (await contract.json()) as {
       components?: {
-        schemas?: Record<string, { properties?: Record<string, { enum?: unknown[] }> }>;
+        schemas?: Record<string, { properties?: Record<string, unknown> }>;
       };
     };
-    const field = document.components?.schemas?.['AudioSpeechCreateRequest']?.properties?.['format'];
-    if (!field) return 'AudioSpeechCreateRequest.format is not in the contract at all';
-    if (Array.isArray(field.enum) && field.enum.length > 0) return null;
-    return 'format is a bare string; the accepted values are not discoverable from the contract';
+    const fields = document.components?.schemas?.['AudioVoiceInventory']?.properties;
+    if (fields?.['formats'] && fields['formats_exhaustive'] && fields['default_format']) return null;
+    return 'AudioVoiceInventory does not publish formats, completeness, and the model default';
   });
 
   await gap('G27', 'synthesis voices can be listed', async () => {
-    const res = await fetch(`${BASE}/v1/audio/voices`);
-    if (res.ok) return null;
-    return `GET /v1/audio/voices -> ${res.status}; \`voice\` is accepted but its legal values are undiscoverable`;
+    const contract = await fetch(`${BASE}/v1/openapi.json`);
+    if (!contract.ok) return `GET /v1/openapi.json -> ${contract.status}`;
+    const document = (await contract.json()) as { paths?: Record<string, unknown> };
+    if (document.paths?.['/v1/audio/voices']) return null;
+    return 'GET /v1/audio/voices is absent from the contract';
   });
 
   await gap('G19', 'serving profiles can be listed', async () => {

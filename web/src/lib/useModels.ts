@@ -32,6 +32,10 @@ export interface ModelOption {
   chatReady: boolean;
   /** Why a model cannot chat — surfaced rather than hidden. */
   reason: string | null;
+  endpointId: string | null;
+  engineProfile: string | null;
+  engineState: string | null;
+  executionLocality: string | null;
 }
 
 /**
@@ -78,6 +82,10 @@ export function useModels(): {
           label: shortModelId(item.display_name || item.model_id),
           chatReady: failure ? false : (status?.chat_ready ?? false),
           reason: failure ?? status?.reason ?? null,
+          endpointId: status?.endpoint_id ?? null,
+          engineProfile: status?.engine_profile ?? null,
+          engineState: status?.engine_state ?? null,
+          executionLocality: status?.execution_locality ?? null,
         };
       })
       // Usable first, so the default selection is a working model.

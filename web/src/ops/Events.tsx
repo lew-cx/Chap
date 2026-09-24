@@ -8,9 +8,8 @@
  * between not displaying an event and not receiving it, and it matters at
  * exactly one event per generated token.
  *
- * The filter names what it wants and has no negation, so "hide token.delta" is
- * every other type — enumerated from `EVENT_TYPES`, which is generated from the
- * contract, so it is exact today and stays exact when LewLM adds a type.
+ * “Hide token.delta” uses the server's `exclude_types` filter, so it remains one
+ * query value even as LewLM adds event types.
  *
  * The free-text box stays client-side. It is a substring search across three
  * fields at once, which is not something the server offers or should.
@@ -68,13 +67,7 @@ export function Events() {
    * that silently outlives the tab that set it.
    */
   useEffect(() => {
-    setFilter(
-      type
-        ? { types: [type] }
-        : hideTokens
-          ? { types: EVENT_TYPES.filter((name) => !name.startsWith('token.')) }
-          : {},
-    );
+    setFilter(type ? { types: [type] } : hideTokens ? { exclude_types: ['token.delta'] } : {});
   }, [type, hideTokens, setFilter]);
 
   /*

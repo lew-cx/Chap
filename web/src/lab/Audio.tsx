@@ -13,7 +13,7 @@
  * Speech returns base64 that Chap plays without writing a file anywhere.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { buildMultipart, type AudioSpeechResponse, type AudioTranscriptionResponse } from '@chap/lewlm';
 
@@ -28,14 +28,6 @@ import { useCapability } from '../lib/useCapability.ts';
 import { useVoices } from '../lib/useVoices.ts';
 import { Table } from '../components/Table.tsx';
 
-/**
- * LewLM's `AudioSpeechCreateRequest.format` defaults to `wav` and is typed as a
- * bare string, so this list is Chap's guess at what the runtime accepts rather
- * than anything the contract publishes — tracked as docs/lewlm-gaps.md#g33. The
- * field stays free-text so a format LewLM gained yesterday is still reachable.
- */
-const FORMATS = ['wav', 'mp3', 'flac', 'ogg'] as const;
-
 function seconds(value: number | null | undefined): string {
   return value != null ? `${value.toFixed(2)}s` : '—';
 }
@@ -47,13 +39,17 @@ export function Audio() {
   const [language, setLanguage] = useState('en');
   const [prompt, setPrompt] = useState('');
   const [voice, setVoice] = useState('');
-  const [format, setFormat] = useState<string>(FORMATS[0]);
+  const [format, setFormat] = useState('wav');
   const [busy, setBusy] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
   const transcription_capability = useCapability('audio_transcription');
   const speech_capability = useCapability('audio_speech');
   const voices = useVoices(speech_capability.models[0] ?? null);
+
+  useEffect(() => {
+    if (voices.defaultFormat) setFormat(voices.defaultFormat);
+  }, [voices.defaultFormat]);
 
   const act = async (label: string, work: () => Promise<unknown>) => {
     setBusy(label);
@@ -163,17 +159,7 @@ export function Audio() {
               <VoiceSelect voices={voices} value={voice} onChange={setVoice} />
             </Labelled>
             <Labelled label="format">
-              <select
-                className="field"
-                value={format}
-                onChange={(event) => setFormat(event.target.value)}
-              >
-                {FORMATS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+              <FormatSelect inventory={voices} value={format} onChange={setFormat} />
             </Labelled>
           </div>
 
@@ -239,6 +225,41 @@ export function Audio() {
           {failure}
         </p>
       )}
+    </>
+  );
+}
+
+function FormatSelect({
+  inventory,
+  value,
+  onChange,
+}: {
+  inventory: ReturnType<typeof useVoices>;
+  value: string;
+  onChange: (format: string) => void;
+}) {
+  if (inventory.formatsExhaustive && inventory.formats.length > 0) {
+    return (
+      <select className="field" value={value} onChange={(event) => onChange(event.target.value)}>
+        {inventory.formats.map((entry) => (
+          <option key={entry.format} value={entry.format} title={entry.media_type}>
+            {entry.format}{entry.verified ? '' : ' (unverified)'}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <>
+      <input
+        className="field"
+        list="lewlm-speech-formats"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <datalist id="lewlm-speech-formats">
+        {inventory.formats.map((entry) => <option key={entry.format} value={entry.format} />)}
+      </datalist>
     </>
   );
 }

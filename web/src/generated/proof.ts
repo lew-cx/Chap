@@ -33,11 +33,11 @@ export interface ProofSuite {
 export const PROOF_SUITES: readonly ProofSuite[] = [
   {
     "script": "proof",
-    "ranAt": "2026-08-25T01:18:41.709Z",
-    "passed": 24,
+    "ranAt": "2026-09-22T17:01:13.773Z",
+    "passed": 21,
     "failed": 0,
-    "gaps": 5,
-    "fixed": 17
+    "gaps": 2,
+    "fixed": 20
   },
   {
     "script": "proof:dk",
@@ -54,8 +54,8 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "id": "G13",
     "suite": "proof",
     "title": "/v1/events can be resumed after a drop",
-    "note": "frames carry no id:, so a reconnect has no cursor to resume from",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G11",
@@ -124,8 +124,8 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "id": "G33",
     "suite": "proof",
     "title": "speech formats are published, not guessed",
-    "note": "format is a bare string; the accepted values are not discoverable from the contract",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G27",
@@ -180,22 +180,22 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "id": "G5",
     "suite": "proof",
     "title": "sampling controls are applied",
-    "note": "contract present; this runtime honors none of [seed, top_p]",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G32",
     "suite": "proof",
     "title": "/v1/responses reports a finish reason",
-    "note": "the terminal payload carries no finish_reason, so truncation is invisible on this surface",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G30",
     "suite": "proof",
     "title": "a caller-supplied maxLength is answered, not fatal",
-    "note": "fixed upstream — Chap can drop its workaround",
-    "open": false
+    "note": "no model on this host enforces json_schema at decode time; not probeable here",
+    "open": true
   },
   {
     "id": "G31",

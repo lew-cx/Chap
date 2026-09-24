@@ -28,8 +28,57 @@ import type {
   CompletionUsage,
   ServingProfileApplication,
   StructuredOutputResult,
+  StreamErrorEnvelope,
   ToolCallParseResult,
 } from './types.ts';
+
+/** Reassemble OpenAI-style native tool fragments; semantic validation stays in LewLM. */
+class ToolDeltaAccumulator {
+  private calls = new Map<number, { callId: string; name: string; arguments: string }>();
+
+  push(parts: unknown): void {
+    if (!Array.isArray(parts)) return;
+    for (const [position, raw] of parts.entries()) {
+      if (!raw || typeof raw !== 'object') continue;
+      const part = raw as Record<string, unknown>;
+      const index = typeof part['index'] === 'number' ? part['index'] : position;
+      const fn = part['function'] && typeof part['function'] === 'object'
+        ? part['function'] as Record<string, unknown>
+        : part;
+      const current = this.calls.get(index) ?? { callId: '', name: '', arguments: '' };
+      if (typeof part['id'] === 'string') current.callId = part['id'];
+      if (typeof fn['name'] === 'string') current.name += fn['name'];
+      if (typeof fn['arguments'] === 'string') current.arguments += fn['arguments'];
+      this.calls.set(index, current);
+    }
+  }
+
+  result(): ToolCallParseResult | null {
+    if (this.calls.size === 0) return null;
+    const tool_calls = [];
+    const issues = [];
+    for (const [index, call] of [...this.calls.entries()].sort((a, b) => a[0] - b[0])) {
+      try {
+        const args = JSON.parse(call.arguments || '{}') as unknown;
+        if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('arguments are not an object');
+        tool_calls.push({ call_id: call.callId || `call_${index}`, name: call.name, arguments: args as Record<string, unknown> });
+      } catch (cause) {
+        issues.push({
+          code: 'invalid_json' as const,
+          message: cause instanceof Error ? cause.message : String(cause),
+          candidate_index: index,
+        });
+      }
+    }
+    return {
+      status: issues.length === 0 ? 'parsed' : tool_calls.length > 0 ? 'partial' : 'failed',
+      parser: 'upstream_native_stream',
+      tool_calls,
+      issues,
+      parallel: this.calls.size > 1,
+    };
+  }
+}
 
 export type ChatStreamEvent =
   /** First chunk. Carries the serving profile, which appears nowhere else. */
@@ -72,6 +121,8 @@ export type ChatStreamEvent =
        * the transport.
        */
       promptTrace: PromptCompilationTrace | null;
+      /** A terminal in-band failure. Text already delivered remains valid partial output. */
+      error: StreamErrorEnvelope | null;
     }
   | { type: 'done' };
 
@@ -81,6 +132,8 @@ export interface StreamOptions {
   form?: FormData | undefined;
   /** Groups this generation with related calls such as sentence synthesis. */
   correlationId?: string | undefined;
+  /** Stable handle used by LewLM's named cancellation endpoint. */
+  requestId?: string | undefined;
 }
 
 function requestOptions(payload: unknown, options: StreamOptions): RequestOptions {
@@ -92,6 +145,7 @@ function requestOptions(payload: unknown, options: StreamOptions): RequestOption
       accept: 'text/event-stream',
       signal: options.signal,
       correlationId: options.correlationId,
+      headers: options.requestId ? { 'x-request-id': options.requestId } : undefined,
     };
   }
   return {
@@ -99,6 +153,7 @@ function requestOptions(payload: unknown, options: StreamOptions): RequestOption
     accept: 'text/event-stream',
     signal: options.signal,
     correlationId: options.correlationId,
+    headers: options.requestId ? { 'x-request-id': options.requestId } : undefined,
   };
 }
 
@@ -116,6 +171,7 @@ export async function* streamChat(
 
   let opened = false;
   let completed = false;
+  const toolDeltas = new ToolDeltaAccumulator();
 
   for await (const frame of readSSE(res)) {
     if (frame.data === '[DONE]') {
@@ -133,6 +189,7 @@ export async function* streamChat(
     }
 
     const choice = chunk.choices[0];
+    toolDeltas.push(choice?.delta.tool_calls);
     if (choice?.delta.reasoning) {
       yield { type: 'reasoning', reasoning: choice.delta.reasoning };
     }
@@ -150,9 +207,10 @@ export async function* streamChat(
         citations: chunk.citations ?? [],
         metadata: chunk.metadata ?? null,
         structuredOutput: chunk.structured_output ?? null,
-        toolCalls: chunk.tool_calls ?? null,
+        toolCalls: chunk.tool_calls ?? toolDeltas.result(),
         usage: chunk.usage ?? null,
         promptTrace: chunk.prompt_trace ?? null,
+        error: chunk.error ?? null,
       };
     }
   }
@@ -182,6 +240,7 @@ export async function* streamResponses(
 
   let opened = false;
   let completed = false;
+  const toolDeltas = new ToolDeltaAccumulator();
 
   for await (const frame of readSSE(res)) {
     if (frame.data === '[DONE]') {
@@ -198,6 +257,7 @@ export async function* streamResponses(
 
     if (chunk.reasoning) yield { type: 'reasoning', reasoning: chunk.reasoning };
     if (chunk.delta) yield { type: 'text', delta: chunk.delta };
+    toolDeltas.push(chunk.tool_call_delta);
 
     // `/v1/responses` signals completion with `done`, where chat uses
     // `finish_reason`. Same terminal payload either way.
@@ -205,16 +265,14 @@ export async function* streamResponses(
       completed = true;
       yield {
         type: 'final',
-        // `ResponseChunk` carries no finish reason, so a length-truncated reply
-        // is indistinguishable from a complete one on this surface. Reported as
-        // unknown rather than as a `'stop'` this package would be inventing.
-        finishReason: null,
+        finishReason: chunk.finish_reason ?? null,
         citations: chunk.citations ?? [],
         metadata: chunk.metadata ?? null,
         structuredOutput: chunk.structured_output ?? null,
-        toolCalls: chunk.tool_calls ?? null,
+        toolCalls: chunk.tool_calls ?? toolDeltas.result(),
         usage: chunk.usage ?? null,
         promptTrace: chunk.prompt_trace ?? null,
+        error: chunk.error ?? null,
       };
     }
   }
@@ -240,6 +298,7 @@ export function chatCompletion(
     ...opts,
     signal: options.signal,
     correlationId: options.correlationId,
+    headers: options.requestId ? { 'x-request-id': options.requestId } : undefined,
   });
 }
 
@@ -257,6 +316,7 @@ export function createResponse(
     ...opts,
     signal: options.signal,
     correlationId: options.correlationId,
+    headers: options.requestId ? { 'x-request-id': options.requestId } : undefined,
   });
 }
 
@@ -282,6 +342,7 @@ async function* replayChat(pending: Promise<ChatCompletionResponse>): AsyncGener
     toolCalls: response.tool_calls ?? null,
     usage: response.usage,
     promptTrace: response.prompt_trace ?? null,
+    error: null,
   };
   yield { type: 'done' };
 }
@@ -296,15 +357,14 @@ async function* replayResponse(
   if (response.output_text) yield { type: 'text', delta: response.output_text };
   yield {
     type: 'final',
-    // Same gap as the streaming surface: `/v1/responses` publishes no finish
-    // reason on either transport.
-    finishReason: null,
+    finishReason: response.finish_reason ?? null,
     citations: response.citations ?? [],
     metadata: response.metadata,
     structuredOutput: response.structured_output ?? null,
     toolCalls: response.tool_calls ?? null,
     usage: response.usage ?? null,
     promptTrace: response.prompt_trace ?? null,
+    error: null,
   };
   yield { type: 'done' };
 }

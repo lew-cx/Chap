@@ -18,6 +18,7 @@ import {
   type GrammarResponseFormat,
   type JSONSchemaResponseFormat,
   type ReasoningVisibility,
+  type PromptToolDefinition,
   type ResponseCreateRequest,
   type ResponseInputMessage,
   type SamplingControls,
@@ -69,6 +70,9 @@ export interface ComposerState {
   applyServingProfile: boolean;
   includePromptTrace: boolean;
   systemPrompt: string;
+  /** Declarative tools sent to LewLM; empty JSON array disables tool calling. */
+  toolsText: string;
+  toolChoice: 'auto' | 'none' | 'required';
   format: FormatState;
   context: ContextSource[];
   /**
@@ -136,6 +140,21 @@ export function parseFormat(format: FormatState): { value: ResponseFormat | null
     };
   } catch (cause) {
     return { value: null, error: (cause as Error).message };
+  }
+}
+
+export function parseTools(source: string): { value: PromptToolDefinition[]; error: string | null } {
+  try {
+    const value = JSON.parse(source) as unknown;
+    if (!Array.isArray(value)) return { value: [], error: 'tools must be a JSON array' };
+    for (const [index, tool] of value.entries()) {
+      if (!tool || typeof tool !== 'object' || typeof (tool as { name?: unknown }).name !== 'string') {
+        return { value: [], error: `tools[${index}].name must be a string` };
+      }
+    }
+    return { value: value as PromptToolDefinition[], error: null };
+  } catch (cause) {
+    return { value: [], error: (cause as Error).message };
   }
 }
 
@@ -214,6 +233,7 @@ export function buildRequest(
   const sampling = compactSampling(state.sampling);
   const format = parseFormat(state.format).value;
   const citationContext = buildCitationContext(state.context);
+  const tools = parseTools(state.toolsText).value;
 
   // Every field both surfaces share, spelled once.
   const shared = {
@@ -228,6 +248,7 @@ export function buildRequest(
     ...(sampling ? { sampling } : {}),
     ...(format ? { response_format: format } : {}),
     ...(citationContext ? { citation_context: citationContext } : {}),
+    ...(tools.length > 0 ? { tools, tool_choice: state.toolChoice } : {}),
   };
 
   const content = attachments.length > 0 ? contentParts(prompt, attachments) : prompt;

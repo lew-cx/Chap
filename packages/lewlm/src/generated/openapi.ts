@@ -242,6 +242,10 @@ export interface paths {
          *     `?types=token.delta&request_id=req-1` is one request's tokens and nothing
          *     else. Filtering happens before an event is queued for this connection, so an
          *     excluded event costs the connection nothing.
+         *
+         *     Every frame carries `id:`; send it back as `Last-Event-ID` or `?after=` to
+         *     resume from it. The resumed stream says what it could and could not
+         *     replay before delivering anything.
          */
         get: operations["stream_events_v1_events_get"];
         put?: never;
@@ -1281,7 +1285,12 @@ export interface components {
             voice?: string | null;
             /**
              * Format
+             * @description Encoding of the returned audio. The formats a model can return on this host are `formats[]` on `GET /v1/audio/voices?model=`; `wav` is always available. A format a runtime has said it cannot produce is refused as `invalid_request` before synthesis.
              * @default wav
+             * @example wav
+             * @example mp3
+             * @example flac
+             * @example ogg
              */
             format: string;
         };
@@ -1305,6 +1314,26 @@ export interface components {
             duration_seconds?: number | null;
             routing: components["schemas"]["RoutingDecision"];
             metadata: components["schemas"]["ExecutionMetadata"];
+        };
+        /**
+         * AudioSpeechFormat
+         * @description One encoding a runtime can return synthesized speech in.
+         *
+         *     `verified` is true when LewLM produces the encoding itself or has observed
+         *     this runtime return it, so a listed verified format is a guarantee. False
+         *     means LewLM forwards the name to the backend, which decides: the format is
+         *     reachable but not vouched for.
+         */
+        AudioSpeechFormat: {
+            /** Format */
+            format: string;
+            /** Media Type */
+            media_type: string;
+            /**
+             * Verified
+             * @default true
+             */
+            verified: boolean;
         };
         /** AudioTranscriptionCreateResponse */
         AudioTranscriptionCreateResponse: {
@@ -1352,7 +1381,7 @@ export interface components {
         };
         /**
          * AudioVoiceInventory
-         * @description Voices available for one model on this host.
+         * @description Voices and encodings available for one model on this host.
          */
         AudioVoiceInventory: {
             /** Model Id */
@@ -1368,6 +1397,23 @@ export interface components {
             enumerable: boolean;
             /** Reason */
             reason?: string | null;
+            /**
+             * Formats
+             * @description Encodings `POST /v1/audio/speech` can return for this model on this host. A `verified` format is a guarantee; an unverified one is forwarded to the backend, which decides.
+             */
+            formats?: components["schemas"]["AudioSpeechFormat"][];
+            /**
+             * Formats Exhaustive
+             * @description True when `formats` is the complete set and any other `format` is refused before synthesis. False when the runtime forwards the name to a backend that may accept more.
+             * @default true
+             */
+            formats_exhaustive: boolean;
+            /**
+             * Default Format
+             * @description The `format` a speech request gets when it names none.
+             * @default wav
+             */
+            default_format: string;
         };
         /**
          * AudioVoiceSource
@@ -1427,6 +1473,11 @@ export interface components {
             capability: string;
             /** Workload Class */
             workload_class?: string | null;
+            /**
+             * Preset
+             * @description Serving-profile preset to measure: `interactive` (latency-first) or `throughput`; defaults to the configured preset.
+             */
+            preset?: string | null;
         };
         /**
          * BackendFeatureProbe
@@ -1650,6 +1701,28 @@ export interface components {
             /** File Name */
             file_name?: string | null;
             input: components["schemas"]["BrandedDocumentTemplateInput"];
+        };
+        /**
+         * BridgeProfile
+         * @description Local bridge profile for an upstream inference server.
+         */
+        BridgeProfile: {
+            /** Profile Id */
+            profile_id: string;
+            /** Endpoint Id */
+            endpoint_id?: string | null;
+            /** @default openai_compatible */
+            provider: components["schemas"]["RuntimeProvider"];
+            /** @default external_accelerator */
+            runtime_affinity: components["schemas"]["RuntimeAffinity"];
+            /** @default unverified */
+            ownership: components["schemas"]["CapabilityOwnership"];
+            /** Base Url */
+            base_url?: string | null;
+            /** Supported Capabilities */
+            supported_capabilities?: components["schemas"]["CapabilityName"][];
+            /** Notes */
+            notes?: string[];
         };
         /** BuiltInSkillDescriptor */
         BuiltInSkillDescriptor: {
@@ -2332,6 +2405,11 @@ export interface components {
              * @default true
              */
             measured: boolean;
+            /**
+             * Cached Tokens
+             * @description Prompt tokens the backend reported as served from its own prefix cache (OpenAI-style prompt_tokens_details.cached_tokens). Absent when the backend exposes no such counter; LewLM never infers it.
+             */
+            cached_tokens?: number | null;
         };
         /**
          * ComponentKind
@@ -2406,6 +2484,27 @@ export interface components {
             tool_sandbox_enabled: boolean;
             /** Conversion Sandbox Enabled */
             conversion_sandbox_enabled: boolean;
+        };
+        /**
+         * ContainerStatus
+         * @description What LewLM can honestly say about running inside a container.
+         *
+         *     ``runtime`` names the container runtime only when a signal identified one;
+         *     an explicit marker with no other evidence reports ``"unknown"``. ``reason``
+         *     is operator-facing prose and always explains the verdict, including the
+         *     negative one.
+         */
+        ContainerStatus: {
+            /** In Container */
+            in_container: boolean;
+            /** Runtime */
+            runtime?: ("docker" | "podman" | "containerd" | "kubernetes" | "unknown") | null;
+            /** Indicators */
+            indicators?: string[];
+            /** Reason */
+            reason: string;
+            /** Image Flavor */
+            image_flavor?: string | null;
         };
         /** ContractTextReplacementInput */
         ContractTextReplacementInput: {
@@ -2997,6 +3096,63 @@ export interface components {
             /** Index */
             index: number;
         };
+        /**
+         * EngineHealth
+         * @description One configured external engine, from LewLM's cached inventory — never a live probe.
+         *
+         *     `status: ok` on the health response means *this service*; an engine may be
+         *     unreachable at the same time, and a model may be cold. Read `engines` here,
+         *     and `startup.warm_models` on `GET /v1/runtime`, instead of guessing from
+         *     the HTTP status.
+         */
+        EngineHealth: {
+            /** Endpoint Id */
+            endpoint_id: string;
+            /** Profile */
+            profile: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * State
+             * @default unknown
+             */
+            state: string;
+            /** Inventory Age Seconds */
+            inventory_age_seconds?: number | null;
+            /**
+             * Advertised Model Count
+             * @default 0
+             */
+            advertised_model_count: number;
+            /** Inventory Error */
+            inventory_error?: string | null;
+        };
+        /**
+         * EngineStartupPhase
+         * @description What LewLM knows about one external engine without probing it.
+         */
+        EngineStartupPhase: {
+            /** Endpoint Id */
+            endpoint_id: string;
+            /** Profile */
+            profile: string;
+            /** Enabled */
+            enabled: boolean;
+            /** State */
+            state: string;
+            /** Inventory Age Seconds */
+            inventory_age_seconds?: number | null;
+            /**
+             * Advertised Model Count
+             * @default 0
+             */
+            advertised_model_count: number;
+            /** First Advertised At */
+            first_advertised_at?: string | null;
+        };
         /** ExecutionMetadata */
         ExecutionMetadata: {
             /**
@@ -3049,6 +3205,12 @@ export interface components {
             /** Runtime Name */
             runtime_name?: string | null;
             runtime_affinity?: components["schemas"]["RuntimeAffinity"] | null;
+            /** Endpoint Id */
+            endpoint_id?: string | null;
+            /** Engine Profile */
+            engine_profile?: string | null;
+            /** Execution Locality */
+            execution_locality?: string | null;
         };
         /** ExecutionRoutingMetadata */
         ExecutionRoutingMetadata: {
@@ -3065,6 +3227,10 @@ export interface components {
             modality_path_reason?: string | null;
             /** Alternatives */
             alternatives?: string[];
+            /** Fallback From Model Id */
+            fallback_from_model_id?: string | null;
+            /** Fallback Reason */
+            fallback_reason?: string | null;
         };
         /** ExecutionServingMetadata */
         ExecutionServingMetadata: {
@@ -3356,6 +3522,8 @@ export interface components {
             cluster?: {
                 [key: string]: unknown;
             } | null;
+            /** Engines */
+            engines?: components["schemas"]["EngineHealth"][];
         };
         /**
          * HostCapabilityReadiness
@@ -3550,8 +3718,14 @@ export interface components {
             /** Backend Feature Probes */
             backend_feature_probes?: components["schemas"]["BackendFeatureProbe"][];
             llamacpp_build?: components["schemas"]["LlamaCppBuildFlavor"] | null;
+            container?: components["schemas"]["ContainerStatus"] | null;
+            storage_access?: components["schemas"]["StorageAccessStatus"] | null;
             /** Notes */
             notes?: string[];
+            /** External Endpoints */
+            external_endpoints?: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * JSONSchemaResponseFormat
@@ -4171,6 +4345,14 @@ export interface components {
             blocked_capabilities?: components["schemas"]["CapabilityName"][];
             /** Reason */
             reason: string;
+            /** Endpoint Id */
+            endpoint_id?: string | null;
+            /** Engine Profile */
+            engine_profile?: string | null;
+            /** Execution Locality */
+            execution_locality?: string | null;
+            /** Engine State */
+            engine_state?: string | null;
         };
         /**
          * ModelCapabilityReport
@@ -4243,7 +4425,7 @@ export interface components {
          * ModelFormat
          * @enum {string}
          */
-        ModelFormat: "gguf" | "mlx" | "onnx_genai" | "huggingface" | "audio_folder" | "adapter_bundle" | "unknown";
+        ModelFormat: "gguf" | "mlx" | "onnx_genai" | "huggingface" | "audio_folder" | "adapter_bundle" | "exl3" | "unknown";
         /**
          * ModelInventory
          * @description API response envelope for listing discovered models.
@@ -4459,6 +4641,11 @@ export interface components {
              */
             active_usage_count: number;
             /**
+             * Pending Lease Count
+             * @default 0
+             */
+            pending_lease_count: number;
+            /**
              * Pending Unload
              * @default false
              */
@@ -4547,6 +4734,8 @@ export interface components {
             removed_count: number;
             /** Manifests */
             manifests: components["schemas"]["ModelManifest"][];
+            /** Notes */
+            notes?: string[];
             /**
              * Scanned At
              * Format: date-time
@@ -4628,6 +4817,22 @@ export interface components {
             details?: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * ModelWarmth
+         * @description Process-local residency for one model; never a claim about upstream residency.
+         */
+        ModelWarmth: {
+            /** Model Id */
+            model_id: string;
+            /** Runtime */
+            runtime: string;
+            /** State */
+            state: string;
+            /** Loaded At */
+            loaded_at?: string | null;
+            /** Load Seconds */
+            load_seconds?: number | null;
         };
         /** OCRAssistedExtractionField */
         OCRAssistedExtractionField: {
@@ -5240,6 +5445,12 @@ export interface components {
             output: components["schemas"]["ResponseOutputText"][];
             /** Output Text */
             output_text: string;
+            /**
+             * Finish Reason
+             * @description Why generation stopped, from the same vocabulary the chat surface publishes: `stop`, `length` (the reply hit `max_output_tokens` and is truncated), or `tool_calls`. Always set by this server; `null` only from a LewLM older than this field.
+             * @default null
+             */
+            finish_reason: string | null;
             usage?: components["schemas"]["CompletionUsage"];
             metadata: components["schemas"]["ExecutionMetadata"];
             /** Citations */
@@ -5422,6 +5633,16 @@ export interface components {
             modality_path_reason?: string | null;
             /** Alternatives */
             alternatives?: string[];
+            /** Endpoint Id */
+            endpoint_id?: string | null;
+            /** Engine Profile */
+            engine_profile?: string | null;
+            /** Execution Locality */
+            execution_locality?: string | null;
+            /** Fallback From Model Id */
+            fallback_from_model_id?: string | null;
+            /** Fallback Reason */
+            fallback_reason?: string | null;
         };
         /**
          * RoutingModalityPath
@@ -5519,6 +5740,8 @@ export interface components {
              * Format: date-time
              */
             started_at: string;
+            /** Ready At */
+            ready_at?: string | null;
             /** Process Id */
             process_id: number;
             /** Hostname */
@@ -5541,6 +5764,7 @@ export interface components {
              * @default 0
              */
             active_request_count: number;
+            startup?: components["schemas"]["StartupPhases"] | null;
             /**
              * Enabled Features
              * @description Public feature surfaces this build has enabled.
@@ -5552,7 +5776,7 @@ export interface components {
          * @description Known execution providers LewLM can own, package, or bridge.
          * @enum {string}
          */
-        RuntimeProvider: "mlx" | "llamacpp" | "llamacpp_server" | "onnx_genai" | "openvino" | "vllm" | "sglang" | "tensorrt_llm" | "ollama" | "lm_studio" | "openai_compatible" | "unknown";
+        RuntimeProvider: "mlx" | "llamacpp" | "llamacpp_server" | "onnx_genai" | "openvino" | "vllm" | "sglang" | "tensorrt_llm" | "exllamav3" | "ollama" | "lm_studio" | "openai_compatible" | "unknown";
         /**
          * RuntimeProviderReport
          * @description Installed or configured provider summary for middleware clients.
@@ -5574,6 +5798,7 @@ export interface components {
             evidence_state: components["schemas"]["CapabilityEvidenceState"];
             /** Notes */
             notes?: string[];
+            bridge?: components["schemas"]["BridgeProfile"] | null;
         };
         /**
          * RuntimeReadinessState
@@ -6169,7 +6394,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "selected" | "disabled" | "not_found" | "runtime_mismatch" | "unavailable";
+            status: "selected" | "disabled" | "not_found" | "runtime_mismatch" | "stale" | "unavailable";
             /**
              * Source
              * @default persisted_autotune
@@ -6185,8 +6410,20 @@ export interface components {
              * @default text_only
              */
             workload_class: string;
+            /**
+             * Preset
+             * @default interactive
+             */
+            preset: string;
             /** Profile Id */
             profile_id?: string | null;
+            /** Stale Inputs */
+            stale_inputs?: {
+                [key: string]: [
+                    string | null,
+                    string | null
+                ];
+            };
             /** Runtime */
             runtime?: string | null;
             /** Reason */
@@ -6254,6 +6491,15 @@ export interface components {
              * @default latency_first
              */
             selection_objective: string;
+            /**
+             * Preset
+             * @default interactive
+             */
+            preset: string;
+            /** Fingerprint */
+            fingerprint?: {
+                [key: string]: string | null;
+            };
             /** Reason */
             reason: string;
             /** Settings Overrides */
@@ -6695,6 +6941,48 @@ export interface components {
          * @enum {string}
          */
         StandardsVocabularyTerm: "kv_offload" | "kv_quantization" | "hybrid_memory" | "pd_disaggregation" | "distributed_kv_transfer" | "strict_tool_parser" | "reasoning_tags" | "parallel_tool_calls" | "streaming_tool_calls" | "responses_api_events" | "mtp_speculation" | "eagle_speculation" | "dflash_speculation" | "ngram_draft_speculation" | "reasoning_budget_speculation" | "transformers_v5_ready" | "cuda13_ready" | "pytorch211_ready" | "cxx20_ready" | "multimodal_omni" | "document_ocr_transformer" | "long_context_embedding" | "local_agent_sandbox";
+        /**
+         * StartupPhases
+         * @description The three startup phases, measured separately and read from cached state.
+         *
+         *     `lewlm_ready` is this process; `engines` is the last cached inventory read
+         *     per endpoint (no probe is made here); `warm_models` is process-local
+         *     residency. Health and model listing stay responsive while an engine is
+         *     unavailable or a model is warming because none of this waits on either.
+         */
+        StartupPhases: {
+            /** Lewlm Ready At */
+            lewlm_ready_at?: string | null;
+            /** Lewlm Ready Seconds */
+            lewlm_ready_seconds?: number | null;
+            /** Engines */
+            engines?: components["schemas"]["EngineStartupPhase"][];
+            /** Warm Models */
+            warm_models?: components["schemas"]["ModelWarmth"][];
+            /** Loading Models */
+            loading_models?: components["schemas"]["ModelWarmth"][];
+        };
+        /**
+         * StorageAccessStatus
+         * @description Whether the process can actually write LewLM's data directory.
+         *
+         *     Container volumes and bind mounts are where this goes wrong: the image runs
+         *     as uid 10001 and a host directory mounted over ``/data`` may not be
+         *     writable by it. ``writable`` comes from a real create/delete probe, not
+         *     from ``os.access``, which answers incorrectly on many mounted filesystems.
+         */
+        StorageAccessStatus: {
+            /** Data Dir */
+            data_dir: string;
+            /** Exists */
+            exists: boolean;
+            /** Writable */
+            writable: boolean;
+            /** Owner */
+            owner?: string | null;
+            /** Reason */
+            reason: string;
+        };
         /** StorageHealth */
         StorageHealth: {
             /** Healthy */
@@ -6746,6 +7034,8 @@ export interface components {
              * @default false
              */
             decoder_enforced: boolean;
+            /** Enforcement Evidence */
+            enforcement_evidence?: ("decoder" | "upstream_native" | "prompt") | null;
             /**
              * Fallback Used
              * @default false
@@ -6790,6 +7080,8 @@ export interface components {
             fallback_used: boolean;
             /** Fallback Reason */
             fallback_reason?: string | null;
+            /** Enforcement Evidence */
+            enforcement_evidence?: ("decoder" | "upstream_native" | "prompt") | null;
             /** Grammar Relaxations */
             grammar_relaxations?: string[];
         };
@@ -7502,6 +7794,13 @@ export interface components {
              * @default null
              */
             tools_path: string | null;
+            /**
+             * Tool Choice
+             * @default null
+             */
+            tool_choice: ("auto" | "none" | "required") | {
+                [key: string]: unknown;
+            } | null;
             /** Mcp Tools */
             mcp_tools?: components["schemas"]["PromptMCPToolDefinition"][];
             /**
@@ -7543,6 +7842,39 @@ export interface components {
             content: string | null;
             /** @default null */
             reasoning: components["schemas"]["ReasoningOutput"] | null;
+            /**
+             * Tool Calls
+             * @default null
+             */
+            tool_calls: {
+                [key: string]: unknown;
+            }[] | null;
+        };
+        /**
+         * StreamErrorEnvelope
+         * @description Why a stream ended before its normal terminal chunk.
+         *
+         *     Carried on a final chunk whose `finish_reason` is `error` (chat) or whose
+         *     `done` is true (responses), followed by `[DONE]`, so a client sees a
+         *     structured failure instead of a dropped connection. Any output already
+         *     delivered stands; LewLM never replays the request. Raw backend payloads
+         *     and credentials are never included.
+         */
+        StreamErrorEnvelope: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Partial Output
+             * @description True when at least one content delta had been delivered before the failure.
+             * @default false
+             */
+            partial_output: boolean;
         };
         /** ChatCompletionChunk */
         ChatCompletionChunk: {
@@ -7573,6 +7905,11 @@ export interface components {
             structured_output: components["schemas"]["StructuredOutputResult"] | null;
             /** @default null */
             tool_calls: components["schemas"]["ToolCallParseResult"] | null;
+            /**
+             * @description Present only on a terminal chunk with finish_reason `error`: the stream ended incompletely.
+             * @default null
+             */
+            error: components["schemas"]["StreamErrorEnvelope"] | null;
             /**
              * @description Compiled-prompt trace when `include_prompt_trace` was set. Present on the final chunk only, so inspecting the prompt does not cost the caller its stream.
              * @default null
@@ -7690,6 +8027,13 @@ export interface components {
              * @default null
              */
             tools_path: string | null;
+            /**
+             * Tool Choice
+             * @default null
+             */
+            tool_choice: ("auto" | "none" | "required") | {
+                [key: string]: unknown;
+            } | null;
             /** Mcp Tools */
             mcp_tools?: components["schemas"]["PromptMCPToolDefinition"][];
             /**
@@ -7725,10 +8069,23 @@ export interface components {
             /** @default null */
             reasoning: components["schemas"]["ReasoningOutput"] | null;
             /**
+             * Tool Call Delta
+             * @default null
+             */
+            tool_call_delta: {
+                [key: string]: unknown;
+            }[] | null;
+            /**
              * Done
              * @default false
              */
             done: boolean;
+            /**
+             * Finish Reason
+             * @description Why the stream ended, on the terminal chunk (`done` true) only: `stop`, `length`, `tool_calls`, `cancelled` (a named cancel stopped it; delivered text stands), or `error`.
+             * @default null
+             */
+            finish_reason: string | null;
             /** Citations */
             citations?: components["schemas"]["GeneratedCitationReference"][];
             /**
@@ -7742,6 +8099,11 @@ export interface components {
             structured_output: components["schemas"]["StructuredOutputResult"] | null;
             /** @default null */
             tool_calls: components["schemas"]["ToolCallParseResult"] | null;
+            /**
+             * @description Present only on a terminal chunk (`done` true) when the stream ended incompletely.
+             * @default null
+             */
+            error: components["schemas"]["StreamErrorEnvelope"] | null;
             /**
              * @description Compiled-prompt trace when `include_prompt_trace` was set. Present on the final chunk only, so inspecting the prompt does not cost the caller its stream.
              * @default null
@@ -7759,7 +8121,7 @@ export interface components {
          * EventType
          * @enum {string}
          */
-        EventType: "system.ready" | "operation.progress" | "request.accepted" | "request.queued" | "request.failed" | "request.completed" | "prefill.started" | "model.scan.started" | "model.scan.completed" | "model.scan.failed" | "model.load.requested" | "model.load.joined" | "model.loading" | "model.loaded" | "model.load.failed" | "model.usage.acquired" | "model.usage.released" | "model.drain.requested" | "model.draining" | "model.unload.blocked" | "model.unloading" | "model.unloaded" | "model.unload.failed" | "audio.chunk" | "audio.transcription.started" | "audio.transcription.completed" | "audio.transcription.failed" | "audio.speech.started" | "audio.speech.completed" | "audio.speech.failed" | "document.parse.started" | "document.parse.completed" | "document.parse.failed" | "document.render.started" | "document.render.completed" | "document.render.failed" | "document.transform.started" | "document.transform.completed" | "document.transform.failed" | "cluster.token.issued" | "cluster.worker.enrolled" | "cluster.worker.heartbeat" | "cluster.plan.updated" | "cluster.pipeline.stage.completed" | "cluster.pipeline.completed" | "cluster.worker.recovered" | "autotune.completed" | "token.delta" | "reasoning.delta" | "speculation.started" | "speculation.accepted" | "tool.pending" | "tool.started" | "tool.finished" | "tool.failed";
+        EventType: "system.ready" | "events.resumed" | "operation.progress" | "request.accepted" | "request.queued" | "request.failed" | "request.completed" | "prefill.started" | "model.scan.started" | "model.scan.completed" | "model.scan.failed" | "model.load.requested" | "model.load.joined" | "model.loading" | "model.loaded" | "model.load.failed" | "model.usage.acquired" | "model.usage.released" | "model.drain.requested" | "model.draining" | "model.unload.blocked" | "model.unloading" | "model.unloaded" | "model.unload.failed" | "audio.chunk" | "audio.transcription.started" | "audio.transcription.completed" | "audio.transcription.failed" | "audio.speech.started" | "audio.speech.completed" | "audio.speech.failed" | "document.parse.started" | "document.parse.completed" | "document.parse.failed" | "document.render.started" | "document.render.completed" | "document.render.failed" | "document.transform.started" | "document.transform.completed" | "document.transform.failed" | "cluster.token.issued" | "cluster.worker.enrolled" | "cluster.worker.heartbeat" | "cluster.plan.updated" | "cluster.pipeline.stage.completed" | "cluster.pipeline.completed" | "cluster.worker.recovered" | "autotune.completed" | "token.delta" | "reasoning.delta" | "speculation.started" | "speculation.accepted" | "tool.pending" | "tool.started" | "tool.finished" | "tool.failed";
         /**
          * StreamEvent
          * @description An event emitted by LewLM subsystems.
@@ -7767,6 +8129,12 @@ export interface components {
         StreamEvent: {
             /** Event Id */
             event_id?: string;
+            /**
+             * Cursor
+             * @description Position of this event in the stream, assigned when it was published: the SSE frame's `id:` and the value `Last-Event-ID` or `?after=` resumes from. Opaque; compare only for equality. Null on an event that was never published to the bus, such as the `events.resumed` marker.
+             * @default null
+             */
+            cursor: string | null;
             type: components["schemas"]["EventType"];
             /** @default system */
             scope: components["schemas"]["EventScope"];
@@ -8313,15 +8681,22 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Event types to deliver. Repeatable or comma-separated. Values here are alternatives; separate filters combine. */
-                types?: ("system.ready" | "operation.progress" | "request.accepted" | "request.queued" | "request.failed" | "request.completed" | "prefill.started" | "model.scan.started" | "model.scan.completed" | "model.scan.failed" | "model.load.requested" | "model.load.joined" | "model.loading" | "model.loaded" | "model.load.failed" | "model.usage.acquired" | "model.usage.released" | "model.drain.requested" | "model.draining" | "model.unload.blocked" | "model.unloading" | "model.unloaded" | "model.unload.failed" | "audio.chunk" | "audio.transcription.started" | "audio.transcription.completed" | "audio.transcription.failed" | "audio.speech.started" | "audio.speech.completed" | "audio.speech.failed" | "document.parse.started" | "document.parse.completed" | "document.parse.failed" | "document.render.started" | "document.render.completed" | "document.render.failed" | "document.transform.started" | "document.transform.completed" | "document.transform.failed" | "cluster.token.issued" | "cluster.worker.enrolled" | "cluster.worker.heartbeat" | "cluster.plan.updated" | "cluster.pipeline.stage.completed" | "cluster.pipeline.completed" | "cluster.worker.recovered" | "autotune.completed" | "token.delta" | "reasoning.delta" | "speculation.started" | "speculation.accepted" | "tool.pending" | "tool.started" | "tool.finished" | "tool.failed")[];
+                types?: ("system.ready" | "events.resumed" | "operation.progress" | "request.accepted" | "request.queued" | "request.failed" | "request.completed" | "prefill.started" | "model.scan.started" | "model.scan.completed" | "model.scan.failed" | "model.load.requested" | "model.load.joined" | "model.loading" | "model.loaded" | "model.load.failed" | "model.usage.acquired" | "model.usage.released" | "model.drain.requested" | "model.draining" | "model.unload.blocked" | "model.unloading" | "model.unloaded" | "model.unload.failed" | "audio.chunk" | "audio.transcription.started" | "audio.transcription.completed" | "audio.transcription.failed" | "audio.speech.started" | "audio.speech.completed" | "audio.speech.failed" | "document.parse.started" | "document.parse.completed" | "document.parse.failed" | "document.render.started" | "document.render.completed" | "document.render.failed" | "document.transform.started" | "document.transform.completed" | "document.transform.failed" | "cluster.token.issued" | "cluster.worker.enrolled" | "cluster.worker.heartbeat" | "cluster.plan.updated" | "cluster.pipeline.stage.completed" | "cluster.pipeline.completed" | "cluster.worker.recovered" | "autotune.completed" | "token.delta" | "reasoning.delta" | "speculation.started" | "speculation.accepted" | "tool.pending" | "tool.started" | "tool.finished" | "tool.failed")[];
                 /** @description Event scopes to deliver. Repeatable or comma-separated. Values here are alternatives; separate filters combine. */
                 scope?: ("system" | "request" | "job")[];
                 /** @description Deliver only events belonging to these requests. Repeatable or comma-separated. Values here are alternatives; separate filters combine. */
                 request_id?: string[];
                 /** @description Deliver only events about these models. Repeatable or comma-separated. Values here are alternatives; separate filters combine. */
                 model_id?: string[];
+                /** @description Event types to leave out, applied after `types`. Repeatable or comma-separated. Values here are alternatives; separate filters combine. */
+                exclude_types?: ("system.ready" | "events.resumed" | "operation.progress" | "request.accepted" | "request.queued" | "request.failed" | "request.completed" | "prefill.started" | "model.scan.started" | "model.scan.completed" | "model.scan.failed" | "model.load.requested" | "model.load.joined" | "model.loading" | "model.loaded" | "model.load.failed" | "model.usage.acquired" | "model.usage.released" | "model.drain.requested" | "model.draining" | "model.unload.blocked" | "model.unloading" | "model.unloaded" | "model.unload.failed" | "audio.chunk" | "audio.transcription.started" | "audio.transcription.completed" | "audio.transcription.failed" | "audio.speech.started" | "audio.speech.completed" | "audio.speech.failed" | "document.parse.started" | "document.parse.completed" | "document.parse.failed" | "document.render.started" | "document.render.completed" | "document.render.failed" | "document.transform.started" | "document.transform.completed" | "document.transform.failed" | "cluster.token.issued" | "cluster.worker.enrolled" | "cluster.worker.heartbeat" | "cluster.plan.updated" | "cluster.pipeline.stage.completed" | "cluster.pipeline.completed" | "cluster.worker.recovered" | "autotune.completed" | "token.delta" | "reasoning.delta" | "speculation.started" | "speculation.accepted" | "tool.pending" | "tool.started" | "tool.finished" | "tool.failed")[];
+                /** @description Resume after this cursor: the `id:` of the last frame received (also `cursor` in its body). The stream then begins with one `events.resumed` frame reporting how many retained events were replayed and how many were lost (`null` when the cursor is from another server lifetime), followed by the replayed events and then live ones. A `Last-Event-ID` header, which an EventSource sends on its own reconnect, takes precedence over this parameter. */
+                after?: string | null;
             };
-            header?: never;
+            header?: {
+                /** @description Resume after this cursor: the `id:` of the last frame received (also `cursor` in its body). The stream then begins with one `events.resumed` frame reporting how many retained events were replayed and how many were lost (`null` when the cursor is from another server lifetime), followed by the replayed events and then live ones. A `Last-Event-ID` header, which an EventSource sends on its own reconnect, takes precedence over this parameter. */
+                "Last-Event-ID"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -8335,8 +8710,9 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                     /**
-                     * @example event: request.completed
-                     *     data: {"event_id":"evt-001","type":"request.completed","scope":"request","created_at":"2026-04-17T17:46:33Z","payload":{"request_id":"req-chat-001","path":"/v1/chat/completions"}}
+                     * @example id: 3f9c2a1b:42
+                     *     event: request.completed
+                     *     data: {"event_id":"evt-001","cursor":"3f9c2a1b:42","type":"request.completed","scope":"request","created_at":"2026-04-17T17:46:33Z","payload":{"request_id":"req-chat-001","path":"/v1/chat/completions"}}
                      */
                     "text/event-stream": string;
                 };

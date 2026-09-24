@@ -10,6 +10,7 @@
 import type {
   GeneratedCitationReference,
   PromptCompilationTrace,
+  StreamErrorEnvelope,
   StructuredOutputResult,
   ToolCallParseResult,
 } from '@chap/lewlm';
@@ -21,6 +22,8 @@ import type { BuiltRequest } from './request.ts';
 import { toCurl } from './request.ts';
 
 export interface RunResult {
+  finishReason: string | null;
+  error: StreamErrorEnvelope | null;
   citations: GeneratedCitationReference[];
   structuredOutput: StructuredOutputResult | null;
   toolCalls: ToolCallParseResult | null;
@@ -31,6 +34,16 @@ export interface RunResult {
 export function RunInspectors({ result }: { result: RunResult }) {
   return (
     <div className="mt-2 flex flex-col gap-2">
+      <div className="panel grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="finish reason" value={result.finishReason ?? 'unknown'} />
+        <Stat label="complete" value={result.error ? 'no — partial output' : result.finishReason === 'length' ? 'no — token limit' : 'yes'} />
+      </div>
+      {result.error && (
+        <Disclosure label="stream interrupted" flagged hint={result.error.code} open>
+          <p className="text-sm" style={{ color: 'var(--skin-danger)' }}>{result.error.message}</p>
+          <Json value={result.error} />
+        </Disclosure>
+      )}
       {result.citations.length > 0 && <Citations citations={result.citations} />}
       {result.structuredOutput?.requested && (
         <StructuredOutput result={result.structuredOutput} />

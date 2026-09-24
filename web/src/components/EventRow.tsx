@@ -34,25 +34,31 @@ export function EventRow({
     /*
      * A real hole in the timeline. Drawing it is the honest thing to do.
      *
-     * There are two ways to make one and they are not the same event: LewLM
-     * cannot replay (docs/lewlm-gaps.md#g13), so a reconnect loses its window;
-     * and pausing this view does not pause the stream, so a resume loses one
-     * too. The marker says which, from the record rather than from a constant —
-     * labelling a pause as a reconnect would be a small lie in the one place
-     * this app exists to tell the truth.
+     * There are two ways to make one and they are not the same event: LewLM's
+     * replay report says retained events were lost (or a restart made the count
+     * unknowable), while pausing this view deliberately discards arrivals. The
+     * marker says which from the record rather than from a constant.
      */
     const detail = String(event.payload?.['detail'] ?? '');
+    const lost = event.payload?.['lost'];
+    const replayed = event.payload?.['replayed'];
+    const replayDetail =
+      lost === null
+        ? 'unknown events lost — server restarted'
+        : typeof lost === 'number'
+          ? `${lost} event${lost === 1 ? '' : 's'} lost · ${String(replayed ?? 0)} replayed`
+          : detail;
     return (
       <div
         className="numeric flex items-center gap-2 px-2"
         style={{ color: 'var(--skin-warn)' }}
-        title={detail}
+        title={String(event.type) === GAP_TYPES.resumed ? detail : replayDetail}
       >
         <span>⎯⎯</span>
         <span className="min-w-0 truncate">
           {String(event.type) === GAP_TYPES.resumed
             ? `resumed — ${detail || 'events while paused were not kept'}`
-            : `reconnected — ${detail || 'events in this window were lost'}`}
+            : `reconnected — ${replayDetail || 'replay continuity unknown'}`}
         </span>
         <span className="flex-1 border-t" style={{ borderColor: 'var(--skin-warn)' }} />
       </div>

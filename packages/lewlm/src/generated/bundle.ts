@@ -87,6 +87,7 @@ export type EventScope = 'system' | 'request' | 'job';
  */
 export type EventType =
   | 'system.ready'
+  | 'events.resumed'
   | 'operation.progress'
   | 'request.accepted'
   | 'request.queued'
@@ -411,6 +412,10 @@ export interface CompletionUsage {
    * True when counts came from the model's own tokenizer. False when the backend exposed no tokenizer and LewLM had to estimate.
    */
   measured?: boolean;
+  /**
+   * Prompt tokens the backend reported as served from its own prefix cache (OpenAI-style prompt_tokens_details.cached_tokens). Absent when the backend exposes no such counter; LewLM never infers it.
+   */
+  cached_tokens?: number | null;
 }
 /**
  * One named, versioned component that contributed to a result.
@@ -481,6 +486,9 @@ export interface ExecutionModelMetadata {
   resolved_model_id?: string | null;
   runtime_name?: string | null;
   runtime_affinity?: RuntimeAffinity | null;
+  endpoint_id?: string | null;
+  engine_profile?: string | null;
+  execution_locality?: string | null;
 }
 /**
  * This interface was referenced by `LewLMBundle`'s JSON-Schema
@@ -493,6 +501,8 @@ export interface ExecutionRoutingMetadata {
   modality_path?: RoutingModalityPath | null;
   modality_path_reason?: string | null;
   alternatives?: string[];
+  fallback_from_model_id?: string | null;
+  fallback_reason?: string | null;
 }
 /**
  * This interface was referenced by `LewLMBundle`'s JSON-Schema
@@ -687,11 +697,19 @@ export interface PromptOverrideRecord {
  * via the `definition` "ServingProfileApplication".
  */
 export interface ServingProfileApplication {
-  status: 'selected' | 'disabled' | 'not_found' | 'runtime_mismatch' | 'unavailable';
+  status: 'selected' | 'disabled' | 'not_found' | 'runtime_mismatch' | 'stale' | 'unavailable';
   source?: string;
   capability?: string;
   workload_class?: string;
+  preset?: string;
   profile_id?: string | null;
+  stale_inputs?: {
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    [k: string]: [unknown, unknown];
+  };
   runtime?: string | null;
   reason: string;
   recommendation_reason?: string | null;
@@ -737,6 +755,7 @@ export interface StructuredOutputResult {
   contract?: (TextResponseFormat | JSONSchemaResponseFormat | GrammarResponseFormat) | null;
   enforcement?: 'none' | 'prompt_guided' | 'decode_time';
   decoder_enforced?: boolean;
+  enforcement_evidence?: ('decoder' | 'upstream_native' | 'prompt') | null;
   fallback_used?: boolean;
   fallback_reason?: string | null;
   grammar_relaxations?: string[];
@@ -803,6 +822,34 @@ export interface ChatCompletionDelta {
   role?: string | null;
   content?: string | null;
   reasoning?: ReasoningOutput | null;
+  tool_calls?:
+    | {
+        [k: string]: unknown;
+      }[]
+    | null;
+}
+/**
+ * Why a stream ended before its normal terminal chunk.
+ *
+ * Carried on a final chunk whose `finish_reason` is `error` (chat) or whose
+ * `done` is true (responses), followed by `[DONE]`, so a client sees a
+ * structured failure instead of a dropped connection. Any output already
+ * delivered stands; LewLM never replays the request. Raw backend payloads
+ * and credentials are never included.
+ *
+ * This interface was referenced by `LewLMBundle`'s JSON-Schema
+ * via the `definition` "StreamErrorEnvelope".
+ */
+export interface StreamErrorEnvelope {
+  code: string;
+  message: string;
+  details?: {
+    [k: string]: unknown;
+  };
+  /**
+   * True when at least one content delta had been delivered before the failure.
+   */
+  partial_output?: boolean;
 }
 /**
  * This interface was referenced by `LewLMBundle`'s JSON-Schema
@@ -846,6 +893,11 @@ export interface RoutingDecision {
   modality_path?: RoutingModalityPath | null;
   modality_path_reason?: string | null;
   alternatives?: string[];
+  endpoint_id?: string | null;
+  engine_profile?: string | null;
+  execution_locality?: string | null;
+  fallback_from_model_id?: string | null;
+  fallback_reason?: string | null;
 }
 /**
  * This interface was referenced by `LewLMBundle`'s JSON-Schema
@@ -1412,6 +1464,12 @@ export interface ChatCompletionRequest {
   output_schema_path?: string | null;
   tools?: PromptToolDefinition[];
   tools_path?: string | null;
+  tool_choice?:
+    | ('auto' | 'none' | 'required')
+    | {
+        [k: string]: unknown;
+      }
+    | null;
   mcp_tools?: PromptMCPToolDefinition[];
   mcp_tools_path?: string | null;
   include_prompt_trace?: boolean;
@@ -1454,6 +1512,10 @@ export interface ChatCompletionChunk {
   structured_output?: StructuredOutputResult | null;
   tool_calls?: ToolCallParseResult | null;
   /**
+   * Present only on a terminal chunk with finish_reason `error`: the stream ended incompletely.
+   */
+  error?: StreamErrorEnvelope | null;
+  /**
    * Compiled-prompt trace when `include_prompt_trace` was set. Present on the final chunk only, so inspecting the prompt does not cost the caller its stream.
    */
   prompt_trace?: PromptCompilationTrace | null;
@@ -1493,6 +1555,12 @@ export interface ResponseCreateRequest {
   output_schema_path?: string | null;
   tools?: PromptToolDefinition[];
   tools_path?: string | null;
+  tool_choice?:
+    | ('auto' | 'none' | 'required')
+    | {
+        [k: string]: unknown;
+      }
+    | null;
   mcp_tools?: PromptMCPToolDefinition[];
   mcp_tools_path?: string | null;
   include_prompt_trace?: boolean;
@@ -1509,6 +1577,10 @@ export interface ResponseCreateResponse {
   session_id?: string | null;
   output: ResponseOutputText[];
   output_text: string;
+  /**
+   * Why generation stopped, from the same vocabulary the chat surface publishes: `stop`, `length` (the reply hit `max_output_tokens` and is truncated), or `tool_calls`. Always set by this server; `null` only from a LewLM older than this field.
+   */
+  finish_reason?: string | null;
   usage?: CompletionUsage;
   metadata: ExecutionMetadata;
   citations?: GeneratedCitationReference[];
@@ -1528,7 +1600,16 @@ export interface ResponseChunk {
   model: string;
   delta?: string | null;
   reasoning?: ReasoningOutput | null;
+  tool_call_delta?:
+    | {
+        [k: string]: unknown;
+      }[]
+    | null;
   done?: boolean;
+  /**
+   * Why the stream ended, on the terminal chunk (`done` true) only: `stop`, `length`, `tool_calls`, `cancelled` (a named cancel stopped it; delivered text stands), or `error`.
+   */
+  finish_reason?: string | null;
   citations?: GeneratedCitationReference[];
   /**
    * Token accounting. Present on the final chunk only, since it is not knowable before then.
@@ -1537,6 +1618,10 @@ export interface ResponseChunk {
   metadata?: ExecutionMetadata | null;
   structured_output?: StructuredOutputResult | null;
   tool_calls?: ToolCallParseResult | null;
+  /**
+   * Present only on a terminal chunk (`done` true) when the stream ended incompletely.
+   */
+  error?: StreamErrorEnvelope | null;
   /**
    * Compiled-prompt trace when `include_prompt_trace` was set. Present on the final chunk only, so inspecting the prompt does not cost the caller its stream.
    */
@@ -1741,6 +1826,10 @@ export interface DocumentTransformResponse {
  */
 export interface StreamEvent {
   event_id?: string;
+  /**
+   * Position of this event in the stream, assigned when it was published: the SSE frame's `id:` and the value `Last-Event-ID` or `?after=` resumes from. Opaque; compare only for equality. Null on an event that was never published to the bus, such as the `events.resumed` marker.
+   */
+  cursor?: string | null;
   type: EventType;
   scope?: EventScope1;
   created_at?: string;

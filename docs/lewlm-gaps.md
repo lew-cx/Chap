@@ -13,140 +13,41 @@ argument. Every entry has a probe in `npm run proof` that flips from `gap` to
 `FIXD` when LewLM gains the capability, which is how we learn a workaround can be
 deleted.
 
-Verified against LewLM `0.4.2` on 2026-08-24, after `POST /v1/models/scan`.
+Verified against LewLM `0.4.2` on 2026-09-22 using its shipped fake backend.
 
 ```
-  24 passed · 0 failed · 5 gaps confirmed · 17 gaps fixed upstream
+  21 passed · 0 failed · 2 gaps confirmed · 20 gaps fixed upstream
 ```
 
 The Settings → Gaps screen is generated from this run by `npm run gen:gaps`, so
 it cannot claim a gap the proof does not confirm or miss one it does. It used to
 be a hand-kept array and had drifted from both this document and the proof.
 
-**G31 is closed, and G13 is half closed.** Two of the five `gap` lines are not
-contract gaps: G1 reports that this server was started without CORS, and G5 that
-the runtime Chap routed to honors none of the sampling controls it was sent — the
-contract reports both faithfully, which is the behaviour each asked for. G13, G32
-and G33 are the entries still open, and the last two are new: both were found by
-reading Chap's own code for places it had quietly filled in a value the contract
-does not publish.
+The two remaining `gap` lines are environment/probe limitations, not missing
+LewLM contracts: G1 records that the fixture was intentionally started without
+CORS, and G30 cannot exercise llama.cpp decode-time grammar enforcement because
+the fixture is an OpenAI-compatible bridge. The real-runtime G30 proof remains
+recorded below.
 
-G31 lasted about two hours. `src/lewlm/registry/gguf_header.py` now reads
-`<arch>.context_length` out of the GGUF header, so a rescan moved both bundles
-from `null` to `131072` with `context_length_source: gguf_header`, and the
-request that used to be refused answers in 3.2 seconds. The fix went further than
-the gap asked: routing now scores against `runtime.serving_context_tokens()` —
-what the runtime will actually reserve, `16384` here — rather than the window the
-model advertises, and the ceiling for an unmeasured model is
-`LEWLM_UNKNOWN_CONTEXT_TOKEN_LIMIT` rather than a literal, named in the refusal.
+This update closed the three actual integration gaps that were open in Chap:
 
-**G29 is closed.** The MLX path now streams incrementally, so the reply arrives
-in pieces rather than all at once and the composer's spoken replies get the head
-start they were built for. That was the last thing standing between "streaming is
-the transport" and "streaming is the experience"; nothing in Chap changed to
-collect it.
+- G13: event frames now carry cursors, reconnects replay through
+  `Last-Event-ID`, and `events.resumed` reports exact or unknowable loss.
+- G32: both response transports now publish `finish_reason`.
+- G33: `GET /v1/audio/voices` publishes formats, completeness, and the model's
+  default encoding.
 
-G30 — the one that let any caller end the server with a single request — is
-closed. `npm run proof` no longer takes LewLM down, and no longer needs a
-restart between runs: its probe now asserts that the request is *answered*. See
-**Closed** for what the crash actually was, including the part this document
-proposed that would not have worked.
-
-The three audio gaps this document opened on 2026-08-09 were closed within a day
-of being written, along with G24, G19 and G28, and each one deleted code from
-Chap. See **Closed** for what came out — that list is the actual argument of this
-project.
-
-The proof gained a check alongside G13's entry — `event stream narrows at the
-server` — because the filtering half is now something Chap depends on rather than
-something it works around, and a capability Chap depends on belongs in `check`,
-not in `gap`.
+Chap deleted its synthetic reconnect-loss marker, its invented response outcome,
+and its hard-coded audio-format list. The Settings screen is refreshed from the
+same proof run.
 
 ---
 
 ## Open
 
-### G13 · `/v1/events` can be filtered, but not resumed
-
-**Filtering landed.** `src/lewlm/events/filters.py` narrows at the bus, before an
-event is enqueued, so an excluded event is never queued, never serialized and
-never sent — a backpressure control rather than a convenience. The route takes
-`types`, `scope`, `request_id` and `model_id`, repeatable or comma-separated,
-with the type and scope vocabularies published as enums on the query parameters.
-Measured on a live `0.4.2`: a subscription asking for `request.accepted` and
-`request.completed` received exactly two frames across a chat completion, and no
-`token.delta`.
-
-**What Chap deleted.** The events explorer filtered on arrival because it had to.
-Its type picker and its `hide token.delta` toggle are now sent to the server, so
-the flood does not cross the wire at all. The ring buffer, the ~10 Hz throttle
-and the virtualized list stay — but they stay because the telemetry rail's whole
-purpose is watching an unfiltered stream go past, which is now a *choice*. That
-is the difference between absorbing a contract limitation and deciding a
-behaviour.
-
-**What is still missing: replay.** The frames carry no `id:`, so there is no
-cursor to resume from and `Last-Event-ID` has nothing to name even if the route
-read it. A reconnect still loses its window.
-
-**Proposed.** A server-side ring buffer, an `id:` on every frame, and
-`Last-Event-ID` replay from it. DocKtizo's generation stream is the shape: every
-frame's `id:` is the same cursor its paged reader accepts, so a client may drop,
-reconnect and resume exactly, or switch between the two readers without replaying
-or skipping.
-
-**Cost, as built.** Chap cannot vouch for a continuous timeline across a
-reconnect, so it does not pretend to: `onStatus` fires `reconnected` and the
-store pushes an explicit **"events between the drop and now were lost"** marker
-into the stream. That marker is the entire workaround now, which is a much
-smaller thing than it was this morning.
-
-**One ergonomic note, not a gap.** The filter names what it wants and has no
-negation, so "everything except `token.*`" has to be spelled as the other 53
-types. `EVENT_TYPES` is generated from the contract, so Chap's list is exact and
-cannot drift — but it does mean the common case produces a 53-value query string.
-An `exclude_types` would collapse it. Recorded rather than filed, because the
-capability is there and this is only its shape.
-
-### G32 · `/v1/responses` publishes no finish reason
-
-**What Chap needs.** To tell a complete reply from a truncated one on both
-surfaces. `/v1/chat/completions` says so — `choices[0].finish_reason` carries
-`stop`, `length` or a tool stop — and Chap normalizes both surfaces onto one
-event union, so the field exists on the union either way.
-
-**What is missing.** `ResponseChunk` and `ResponseCreateResponse` carry no
-equivalent. A reply that ran out of `max_output_tokens` mid-sentence is
-indistinguishable from one that finished.
-
-**Proposed.** `finish_reason` on the terminal `ResponseChunk` and on the sync
-response, from the same vocabulary the chat surface already publishes.
-
-**Cost, as built.** One line, and it is the honest one: `finishReason` is `null`
-on this surface rather than the `'stop'` the package used to report. A constant
-that says "finished normally" for every outcome is worse than no value at all —
-it is Chap inventing an upstream's answer, which is the one thing this package
-does not do. Nothing in the UI reads the field yet, so the cost today is only
-that a truncation indicator cannot be built for `/v1/responses`.
-
-### G33 · the speech format vocabulary is not published
-
-**What Chap needs.** The audio formats this build can actually synthesize.
-
-**What is missing.** `AudioSpeechCreateRequest.format` is typed as a bare string
-that defaults to `wav`. The runtime accepts some set of values and the contract
-names none of them, so a picker has to be written from outside the contract.
-
-**Proposed.** An enum on the field, or the formats on
-`GET /v1/audio/voices` beside the voices — which is where the same question was
-answered for voices in G27, and the shape that worked.
-
-**Cost, as built.** `FORMATS = ['wav', 'mp3', 'flac', 'ogg']` in
-`web/src/lab/Audio.tsx` — four values Chap guessed. The guess is now labelled as
-one in the code and tracked here rather than passing for contract knowledge, and
-the control stays free-text so a format LewLM gained yesterday is still
-reachable. Small, but it is exactly the kind of hand-written list that G26 and
-G27 each removed once the contract reached far enough.
+No LewLM contract gap is currently confirmed. The proof's G1 and G30 lines are
+kept visible because they state what this particular fixture run did not
+establish.
 
 ---
 
@@ -168,6 +69,7 @@ and these are the costs that went away.
 | **G8** ingest paths only | the entire M9 file-staging subsystem — never had to be written | `sources[]` byte upload with caller-owned `source_id`, and `source_results[]` with per-source `error_code` / `retryable` |
 | **G9** sessions unrenamable | export → delete → re-import | `PATCH /v1/sessions/{id}` |
 | **G11** bare 500s | both synthesized-envelope branches in `errors.ts` | `invalid_request` (422) with `details.fields[]`; envelope on 404/405/500 too |
+| **G13** events could not resume | the synthetic “everything since disconnect was lost” marker | cursor-bearing frames, replay via `Last-Event-ID`, `exclude_types`, and an `events.resumed` marker whose `lost` count distinguishes continuity, buffer loss, and restart |
 | **G16** unresolvable OpenAPI | `hoistInlineDefs`, 60 lines of `$defs` hoisting and `$ref` rewriting | a 15-line `assertResolvable` guard, kept only because the failure mode is otherwise dozens of opaque "Can't resolve $ref" lines |
 | **G21** inventory readiness | the N+1 capability fan-out | `capability_availability[]` on `/v1/models` |
 | **G12** no error catalog | the regex over `core/errors.py` in `gen-types.mjs` | `errors[]` in the bundle: 39 codes with `http_status`, `retryable`, `description`, generated from the exception classes. `npm run proof` asserts the published status matches what the API returns. |
@@ -187,6 +89,8 @@ and these are the costs that went away.
 | **G31** a model with no published context length was capped at 4,096 tokens | the bisection, and `DOCKTIZO_LEWLM_STRUCTURED_MAX_OUTPUT_TOKENS=768` in the bench configuration — a value arrived at by halving until requests stopped being refused | `registry/gguf_header.py` reads `<arch>.context_length` from the GGUF header, so a rescan moved both bundles from `null` to `131072` and stamps `context_length_source`. Routing scores against `runtime.serving_context_tokens()` — what the runtime will actually reserve — rather than the advertised window, and the ceiling for a model that is still unmeasured is `LEWLM_UNKNOWN_CONTEXT_TOKEN_LIMIT`, named in the refusal. The request that was `400 routing_error` answers in 3.2s. |
 | **G30** a caller-supplied `maxLength` killed the server | the probe's "did LewLM survive" check, which is now an assertion that the request was *answered*, and the restart between proof runs | LewLM keeps the bounds it compiles into a grammar inside llama.cpp's parser ceiling, parses every finished grammar with llama.cpp's own parser before it can reach a decoder, and names what it left out in `structured_output.grammar_relaxations`. A contract the decoder cannot be constrained to at all comes back as `invalid_request` naming the offending rule. |
 | **G19** no serving-profile listing | the "recommendation from the run you just triggered" framing in Ops | `GET /v1/serving-profiles` with `model` / `capability` / `limit`. Listing only — pin and delete were left as a real design decision rather than guessed at. |
+| **G32** responses had no finish reason | the normalized `null` outcome | `finish_reason` on sync and streamed response terminal payloads, rendered beside every run |
+| **G33** speech formats unpublished | the four-value `FORMATS` constant | per-model `formats[]`, `formats_exhaustive`, and `default_format` on the voice inventory |
 | Kokoro-shaped bundles undiscoverable | copying `kokoro-v1_0.safetensors` to `weights.safetensors` in the models directory | published-bundle discovery: `config.json` + model-named weights + no tokenizer or processor is MLX/runnable. The bundle is used as published. |
 | KV-cache default | `LEWLM_KV_CACHE_QUANTIZATION_BITS=16` from the run instructions | default off; quantized KV pairs with `flash_attn` or is refused |
 | `int \| None` via env | — | `""` / `null` / `none` / `~` unset any optional setting |

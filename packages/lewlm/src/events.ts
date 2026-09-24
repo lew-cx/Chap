@@ -3,9 +3,7 @@
  *
  * SSE, not the WebSocket route. The WS endpoint is server→client only and never
  * reads a client message, so it buys nothing over SSE; SSE crosses Chap's proxy
- * as an ordinary streaming fetch where WS would need an upgrade handler; and
- * `RequestGuard` is HTTP middleware, so the WS route skips the API key and the
- * rate limit entirely (docs/lewlm-gaps.md#g14).
+ * as an ordinary streaming fetch where WS would need an upgrade handler.
  *
  * The stream can be narrowed at the server. Values inside one dimension are
  * alternatives and dimensions combine, so `{ types: ['token.delta'],
@@ -14,9 +12,9 @@
  * backpressure control rather than a convenience — an excluded event is never
  * serialized and never sent.
  *
- * There is still no replay (#g13), so a reconnect loses whatever happened while
- * the socket was down. That is reported rather than hidden: `onStatus` fires
- * with `reconnected`, and the UI marks the gap.
+ * Every frame's cursor is sent back as `Last-Event-ID` after a reconnect. LewLM
+ * begins the resumed stream with `events.resumed`, including an exact lost count
+ * or `null` when the cursor belongs to a previous server lifetime.
  */
 
 import type { Client } from './http.ts';
@@ -29,12 +27,12 @@ export type EventStreamStatus = 'connecting' | 'open' | 'reconnected' | 'closed'
  * What to deliver. Every dimension is optional; an empty filter admits
  * everything, which is what an unfiltered subscriber gets.
  *
- * There is no negation — the filter names what it wants, not what it does not.
- * A caller that means "everything except tokens" has to enumerate the rest,
- * which `EVENT_TYPES` makes exact rather than a guess.
+ * `exclude_types` is applied after `types`, which keeps the common “everything
+ * except token deltas” request short.
  */
 export interface EventFilter {
   types?: readonly string[];
+  exclude_types?: readonly string[];
   scope?: readonly string[];
   request_id?: readonly string[];
   model_id?: readonly string[];
@@ -45,6 +43,10 @@ export interface EventSubscription {
   filter?: EventFilter;
   onEvent: (event: StreamEvent) => void;
   onStatus?: (status: EventStreamStatus, detail?: string) => void;
+  /** Cursor already consumed by a previous subscription (for filter changes). */
+  after?: string | undefined;
+  /** Persists the newest server cursor outside this retry loop. */
+  onCursor?: (cursor: string) => void;
 }
 
 const FIRST_RETRY_MS = 1_000;
@@ -82,10 +84,11 @@ function search(filter: EventFilter | undefined): string {
 
 export async function subscribeEvents(
   client: Client,
-  { signal, filter, onEvent, onStatus }: EventSubscription,
+  { signal, filter, onEvent, onStatus, after, onCursor }: EventSubscription,
 ): Promise<void> {
   let retry = FIRST_RETRY_MS;
   let everOpened = false;
+  let cursor = after;
 
   while (!signal.aborted) {
     try {
@@ -93,6 +96,7 @@ export async function subscribeEvents(
       const res = await client.raw('GET', `/v1/events${search(filter)}`, {
         accept: 'text/event-stream',
         signal,
+        headers: cursor ? { 'Last-Event-ID': cursor } : undefined,
       });
 
       onStatus?.(everOpened ? 'reconnected' : 'open');
@@ -101,7 +105,13 @@ export async function subscribeEvents(
 
       for await (const frame of readSSE(res)) {
         if (!frame.data || frame.data === '[DONE]') continue;
-        onEvent(JSON.parse(frame.data) as StreamEvent);
+        const event = JSON.parse(frame.data) as StreamEvent;
+        const nextCursor = frame.id ?? event.cursor ?? undefined;
+        if (nextCursor) {
+          cursor = nextCursor;
+          onCursor?.(nextCursor);
+        }
+        onEvent(event);
       }
     } catch (cause) {
       if (signal.aborted) break;

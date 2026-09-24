@@ -17,16 +17,28 @@ import type { AudioVoiceInventory } from '@chap/lewlm';
 import { lewlm } from './client.ts';
 
 type Voice = NonNullable<AudioVoiceInventory['voices']>[number];
+type SpeechFormat = NonNullable<AudioVoiceInventory['formats']>[number];
 
 export interface VoiceInventory {
   voices: Voice[];
   enumerable: boolean;
   /** Why the list is empty or partial, in LewLM's words. */
   reason: string | null;
+  formats: SpeechFormat[];
+  formatsExhaustive: boolean;
+  defaultFormat: string;
   loading: boolean;
 }
 
-const NONE: VoiceInventory = { voices: [], enumerable: false, reason: null, loading: false };
+const NONE: VoiceInventory = {
+  voices: [],
+  enumerable: false,
+  reason: null,
+  formats: [],
+  formatsExhaustive: false,
+  defaultFormat: 'wav',
+  loading: false,
+};
 
 export function useVoices(modelId: string | null): VoiceInventory {
   const [inventory, setInventory] = useState<VoiceInventory>(NONE);
@@ -47,6 +59,9 @@ export function useVoices(modelId: string | null): VoiceInventory {
           voices: result.voices ?? [],
           enumerable: result.enumerable,
           reason: result.reason ?? null,
+          formats: result.formats ?? [],
+          formatsExhaustive: result.formats_exhaustive,
+          defaultFormat: result.default_format,
           loading: false,
         });
       })

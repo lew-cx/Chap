@@ -14,6 +14,7 @@ import type {
   JobRecord,
   ModelInventory,
   ServingProfileRecommendation,
+  ServingProfileInventory,
 } from '@chap/lewlm';
 
 import { Disclosure } from '../components/Disclosure.tsx';
@@ -30,11 +31,13 @@ export function Jobs() {
   const [plan, setPlan] = useState<ConversionPlan | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [tune, setTune] = useState<ServingProfileRecommendation | null>(null);
+  const [preset, setPreset] = useState<'interactive' | 'throughput'>('interactive');
   const [busy, setBusy] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
   // Once a job exists, poll it. `usePolled(null)` is the idle state.
   const job = usePolled<JobRecord>(jobId ? `/v1/jobs/${jobId}` : null, 2000);
+  const profiles = usePolled<ServingProfileInventory>('/v1/serving-profiles', 15_000);
 
   const act = async (label: string, work: () => Promise<unknown>) => {
     setBusy(label);
@@ -152,6 +155,12 @@ export function Jobs() {
 
       <Section title="autotune">
         {/* Produces a serving-profile recommendation the chat screen can apply. */}
+        <Labelled label="preset">
+          <select className="field mb-2" value={preset} onChange={(event) => setPreset(event.target.value as typeof preset)}>
+            <option value="interactive">interactive · latency first</option>
+            <option value="throughput">throughput</option>
+          </select>
+        </Labelled>
         <button
           type="button"
           className="btn"
@@ -160,7 +169,7 @@ export function Jobs() {
             void act('autotune', async () => {
               setTune(
                 await lewlm.request<ServingProfileRecommendation>('POST', '/v1/benchmarks/autotune', {
-                  json: { model_id: modelId },
+                  json: { model_id: modelId, prompt: 'Benchmark ping', capability: 'chat', preset },
                 }),
               );
             })
@@ -180,6 +189,12 @@ export function Jobs() {
             run autotune to inspect a recommendation for the selected model
           </p>
         )}
+      </Section>
+
+      <Section title="serving profiles" hint={`${profiles.data?.count ?? 0} persisted`}>
+        <Disclosure label="measured profiles" open>
+          <Json value={profiles.data ?? { count: 0, items: [] }} maxHeight="24rem" />
+        </Disclosure>
       </Section>
 
       {busy && <p className="micro-label">{busy}…</p>}

@@ -58,6 +58,10 @@ export function SpeechPanel({ speech }: { speech: SpeechController }) {
           label="voices"
           value={voices.loading ? '…' : `${voices.voices.length}${voices.enumerable ? '' : ' (not enumerable)'}`}
         />
+        <Stat
+          label="formats"
+          value={voices.formats.length ? voices.formats.map((entry) => entry.format).join(', ') : voices.defaultFormat}
+        />
       </div>
 
       <div className="panel grid grid-cols-2 gap-3 sm:grid-cols-4">

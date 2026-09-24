@@ -61,6 +61,25 @@ export function Overview() {
         </div>
       </Section>
 
+      <Section title="engines" hint={`${health?.engines?.length ?? 0} configured`}>
+        <div className="flex flex-col gap-2">
+          {(health?.engines ?? []).map((engine) => (
+            <div key={engine.endpoint_id} className="panel grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <Stat label="endpoint" value={engine.endpoint_id} />
+              <Stat label="profile" value={engine.profile} />
+              <Stat label="state" value={engine.state} />
+              <Stat label="advertised models" value={engine.advertised_model_count} />
+              <Stat label="inventory age" value={engine.inventory_age_seconds == null ? '—' : `${engine.inventory_age_seconds.toFixed(1)}s`} />
+              {engine.inventory_error && (
+                <p className="col-span-2 sm:col-span-5 text-sm" style={{ color: 'var(--skin-danger)' }}>
+                  {engine.inventory_error}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </Section>
+
       <Section title="models">
         <div className="panel grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="discovered" value={inventory?.count ?? '—'} />

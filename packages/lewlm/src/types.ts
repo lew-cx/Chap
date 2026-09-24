@@ -56,6 +56,7 @@ export type {
   SamplingControlReport,
   SamplingControls,
   ServingProfileApplication,
+  StreamErrorEnvelope,
   StreamEvent,
   StructuredOutputResult,
   TextResponseFormat,
@@ -68,7 +69,7 @@ export type { KnownErrorCode, KnownEventType } from './generated/enums.ts';
 export { CONTRACT } from './generated/meta.ts';
 export type { operations, paths } from './generated/openapi.ts';
 
-// --- Helpers that turn any of the 52 routes into a one-line alias ------------
+// --- Helpers that turn any published route into a one-line alias -------------
 
 type Op<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends keyof operations
   ? operations[paths[P][M]]
@@ -111,6 +112,8 @@ export type CacheStats = Res<'/v1/cache/stats', 'get'>;
 export type ClusterStatus = Res<'/v1/cluster/status', 'get'>;
 export type ClusterStats = Res<'/v1/cluster/stats', 'get'>;
 export type ServingProfileRecommendation = Res<'/v1/benchmarks/autotune', 'post'>;
+export type ServingProfileInventory = Res<'/v1/serving-profiles', 'get'>;
+export type RequestCancellationRecord = Res<'/v1/requests/{request_id}/cancel', 'post'>;
 
 export type SessionRecord = Res<'/v1/sessions', 'post'>;
 export type SessionListResponse = Res<'/v1/sessions', 'get'>;

@@ -32,6 +32,7 @@ export const EVENT_TYPES = [
   "document.transform.completed",
   "document.transform.failed",
   "document.transform.started",
+  "events.resumed",
   "model.drain.requested",
   "model.draining",
   "model.load.failed",

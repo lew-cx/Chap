@@ -7,7 +7,7 @@
  *   examples/integration-bundle.json  19 root schemas + shared $defs, and the
  *                                     ONLY place the streaming and request
  *                                     shapes are published
- *   OpenAPI 3.1                       all 52 routes and 246 component schemas,
+ *   OpenAPI 3.1                       every published route and component schema,
  *                                     which omit every streaming/request shape
  *
  * Verified: the six types missing from `components.schemas`
@@ -110,8 +110,7 @@ const VENV_PYTHON =
 
 /**
  * LewLM builds its OpenAPI document without binding a port, so the default path
- * needs no running server — just the checkout's venv. Verified: 52 paths,
- * 246 component schemas.
+ * needs no running server — just the checkout's venv.
  */
 async function openapiFromVenv() {
   const python = join(LEWLM_HOME, VENV_PYTHON);

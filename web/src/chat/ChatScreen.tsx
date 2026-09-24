@@ -26,6 +26,7 @@ import {
   type ResponseCreateRequest,
   type SamplingControlReport,
   type ServingProfileApplication,
+  type RequestCancellationRecord,
 } from '@chap/lewlm';
 
 import { Labelled, Stat } from '../components/Field.tsx';
@@ -46,11 +47,13 @@ import { RunInspectors, type RunResult } from './RunInspectors.tsx';
 import { SessionsPanel } from './SessionsPanel.tsx';
 import { SamplingPanel } from './SamplingPanel.tsx';
 import { SpeechPanel } from './SpeechPanel.tsx';
+import { ToolsPanel } from './ToolsPanel.tsx';
 import {
   buildRequest,
   INITIAL_FORMAT,
   MAX_TOKENS,
   parseFormat,
+  parseTools,
   TEMPERATURE,
   type Attachment,
   type ComposerState,
@@ -62,6 +65,7 @@ type Drawer =
   | 'context'
   | 'format'
   | 'system'
+  | 'tools'
   | 'sessions'
   | 'speech'
   | 'dictation'
@@ -77,6 +81,11 @@ interface Turn {
   usage: CompletionUsage | null;
   servingProfile: ServingProfileApplication | null;
   result: RunResult | null;
+}
+
+interface RetryDraft {
+  text: string;
+  attachments: Attachment[];
 }
 
 const EMPTY_TURN: Omit<Turn, 'role' | 'text'> = {
@@ -122,6 +131,8 @@ export function ChatScreen() {
     applyServingProfile: true,
     includePromptTrace: false,
     systemPrompt: '',
+    toolsText: '[]',
+    toolChoice: 'auto',
     format: INITIAL_FORMAT,
     context: [],
     sessionId: null,
@@ -137,7 +148,10 @@ export function ChatScreen() {
   // which took the whole app down with it.
   const [error, setError] = useState<Error | null>(null);
   const [streaming, setStreaming] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [retryDraft, setRetryDraft] = useState<RetryDraft | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const activeRequestId = useRef<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   /*
    * Part names must be unique within a request, and only within one. Derived
@@ -149,6 +163,11 @@ export function ChatScreen() {
   const promptTokens = useTokenCount(prompt, state.model);
   const structuredSupport = useStructuredSupport(state.model);
   const speech = useSpeech();
+
+  // Leaving Chat must release an in-flight response. The visible Stop control
+  // uses named cancellation so it can receive the terminal chunk; an unmount
+  // has no UI left to receive one, so closing the fetch is the correct teardown.
+  useEffect(() => () => abort.current?.abort(), []);
 
   // A transcript is appended rather than assigned: an utterance is one more
   // thing said, and clobbering a half-typed prompt would lose work the user can
@@ -169,6 +188,7 @@ export function ChatScreen() {
     setState((current) => ({ ...current, [key]: value }));
 
   const formatError = useMemo(() => parseFormat(state.format).error, [state.format]);
+  const toolError = useMemo(() => parseTools(state.toolsText).error, [state.toolsText]);
 
   // Default to a model that can actually chat. Picking models[0] blindly
   // selects an unusable model on this host — four of nine cannot chat.
@@ -198,11 +218,13 @@ export function ChatScreen() {
 
   async function send() {
     const text = prompt.trim();
-    if ((!text && attachments.length === 0) || streaming || formatError) return;
+    if ((!text && attachments.length === 0) || streaming || formatError || toolError) return;
 
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
+    const requestId = crypto.randomUUID();
+    activeRequestId.current = requestId;
 
     // Only completed turns are history; the pair appended below is this run.
     const history = turns.map((turn) => ({ role: turn.role, text: turn.text }));
@@ -218,6 +240,7 @@ export function ChatScreen() {
     setPrompt('');
     setAttachments([]);
     setError(null);
+    setRetryDraft(null);
     setStreaming(true);
     setTurns((current) => [
       ...current,
@@ -235,6 +258,7 @@ export function ChatScreen() {
       const options = {
         signal: controller.signal,
         correlationId,
+        requestId,
         ...(built.uploads.length > 0 ? { form: buildMultipart(built.uploads) } : {}),
       };
       const stream =
@@ -264,6 +288,8 @@ export function ChatScreen() {
               metadata: event.metadata,
               usage: event.usage,
               result: {
+                finishReason: event.finishReason,
+                error: event.error,
                 citations: event.citations,
                 structuredOutput: event.structuredOutput,
                 toolCalls: event.toolCalls,
@@ -271,6 +297,16 @@ export function ChatScreen() {
                 request: built,
               },
             });
+            if (event.error) {
+              setError(new LewLMApiError({
+                code: event.error.code,
+                message: event.error.message,
+                status: 200,
+                details: { ...event.error.details, partial_output: event.error.partial_output, in_band: true },
+                requestId,
+              }));
+              setRetryDraft({ text, attachments });
+            }
             setSamplingReport(event.metadata?.sampling ?? null);
             break;
           case 'done':
@@ -310,11 +346,13 @@ export function ChatScreen() {
         set('model', '');
       }
     } finally {
+      activeRequestId.current = null;
+      setStopping(false);
       setStreaming(false);
     }
   }
 
-  const canSend = (prompt.trim().length > 0 || attachments.length > 0) && !formatError;
+  const canSend = (prompt.trim().length > 0 || attachments.length > 0) && !formatError && !toolError;
 
   return (
     <div className="flex h-full flex-col">
@@ -361,7 +399,18 @@ export function ChatScreen() {
             </div>
           ))}
 
-          {error && <ErrorBanner error={error} />}
+          {error && (
+            <ErrorBanner
+              error={error}
+              onRetry={retryDraft ? () => {
+                setTurns((current) => current.slice(0, -2));
+                setPrompt(retryDraft.text);
+                setAttachments(retryDraft.attachments);
+                setRetryDraft(null);
+                setError(null);
+              } : undefined}
+            />
+          )}
 
           <div ref={bottom} />
         </div>
@@ -394,9 +443,16 @@ export function ChatScreen() {
                   key={option.id}
                   value={option.id}
                   disabled={!option.chatReady}
-                  title={option.reason ? `${option.id} — ${option.reason}` : option.id}
+                  title={[
+                    option.id,
+                    option.engineProfile && option.endpointId
+                      ? `${option.engineProfile}@${option.endpointId} (${option.engineState ?? 'unknown'})`
+                      : null,
+                    option.reason,
+                  ].filter(Boolean).join(' — ')}
                 >
                   {option.label}
+                  {option.endpointId ? ` · ${option.engineProfile ?? 'engine'}@${option.endpointId}` : ''}
                   {option.chatReady ? '' : ` — ${blockedLabel(option.reason)}`}
                 </option>
               ))}
@@ -536,13 +592,14 @@ export function ChatScreen() {
           <span className="hairline mx-1 h-4 border-l" />
 
           {(
-            ['sampling', 'context', 'format', 'system', 'sessions', 'speech', 'dictation'] as const
+            ['sampling', 'context', 'format', 'tools', 'system', 'sessions', 'speech', 'dictation'] as const
           ).map((panel) => (
             <Toggle
               key={panel}
               label={panel}
               flagged={
                 (panel === 'format' && formatError != null) ||
+                (panel === 'tools' && toolError != null) ||
                 (panel === 'speech' && speech.error != null) ||
                 (panel === 'dictation' && dictation.error != null)
               }
@@ -618,6 +675,15 @@ export function ChatScreen() {
               />
             )}
             {drawer === 'speech' && <SpeechPanel speech={speech} />}
+            {drawer === 'tools' && (
+              <ToolsPanel
+                source={state.toolsText}
+                choice={state.toolChoice}
+                error={toolError}
+                onSource={(toolsText) => set('toolsText', toolsText)}
+                onChoice={(toolChoice) => set('toolChoice', toolChoice)}
+              />
+            )}
             {drawer === 'dictation' && <DictationPanel dictation={dictation} />}
             {drawer === 'system' && (
               <Labelled label="system_prompt">
@@ -655,14 +721,26 @@ export function ChatScreen() {
               <button
                 type="button"
                 className="btn"
+                disabled={stopping}
                 onClick={() => {
-                  abort.current?.abort();
                   // Stop means stop: silence the clips already scheduled, not
                   // just the ones not yet synthesized.
                   speech.cancel();
+                  const requestId = activeRequestId.current;
+                  if (!requestId) return;
+                  setStopping(true);
+                  void lewlm
+                    .request<RequestCancellationRecord>(
+                      'POST',
+                      `/v1/requests/${encodeURIComponent(requestId)}/cancel`,
+                    )
+                    .catch((cause: unknown) => {
+                      setStopping(false);
+                      setError(cause instanceof Error ? cause : new Error(String(cause)));
+                    });
                 }}
               >
-                Stop
+                {stopping ? 'Stopping…' : 'Stop'}
               </button>
             ) : (
               <button
@@ -749,12 +827,20 @@ function RunMetadata({
         label="tokens"
         value={usage ? `${usage.prompt_tokens}+${usage.completion_tokens}` : '—'}
       />
+      <Stat label="cached" value={usage?.cached_tokens ?? '—'} />
       <Stat label="tok/s" value={rate ?? (usage ? 'unmeasured' : '—')} />
       <Stat label="batched" value={metadata.serving?.batched ? 'yes' : 'no'} />
+      <Stat label="endpoint" value={metadata.model?.endpoint_id ?? 'local'} />
+      <Stat label="engine profile" value={metadata.model?.engine_profile ?? '—'} />
       <Stat label="request" value={metadata.request_id.slice(0, 8)} />
       {/* The profile is only ever reported on the first chunk, so this is the
           one place its status is knowable. */}
       <Stat label="profile" value={servingProfile?.status ?? '—'} />
+      {metadata.routing.fallback_from_model_id && (
+        <div className="col-span-2 sm:col-span-4 text-sm" style={{ color: 'var(--skin-warn)' }}>
+          fell back from {metadata.routing.fallback_from_model_id} to {metadata.model?.resolved_model_id ?? 'another model'}: {metadata.routing.fallback_reason ?? 'no reason reported'}
+        </div>
+      )}
     </div>
   );
 }
@@ -767,7 +853,7 @@ function RunMetadata({
  * to be cast to `LewLMApiError` unconditionally, and reading `.fields` off a
  * value that had none is what turned a two-line naming bug into a blank page.
  */
-function ErrorBanner({ error }: { error: Error }) {
+function ErrorBanner({ error, onRetry }: { error: Error; onRetry?: () => void }) {
   const api = error instanceof LewLMApiError ? error : null;
 
   return (
@@ -777,7 +863,7 @@ function ErrorBanner({ error }: { error: Error }) {
       role="alert"
     >
       <div className="micro-label" style={{ color: 'var(--skin-danger)' }}>
-        {api ? `${api.code} · ${api.status || 'no response'}` : 'chap error · no request made'}
+        {api ? `${api.code} · ${api.details['in_band'] ? 'stream' : api.status || 'no response'}` : 'chap error · no request made'}
       </div>
       <p className="mt-1 text-sm" style={{ color: 'var(--skin-ink)' }}>
         {error.message}
@@ -800,6 +886,11 @@ function ErrorBanner({ error }: { error: Error }) {
         <p className="micro-label mt-2">
           This is a fault in Chap, not a response from LewLM.
         </p>
+      )}
+      {onRetry && (
+        <button type="button" className="btn mt-2" onClick={onRetry}>
+          restore prompt to retry
+        </button>
       )}
     </div>
   );
