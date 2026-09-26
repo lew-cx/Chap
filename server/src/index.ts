@@ -20,7 +20,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 
 import { loadConfig } from './config.ts';
-import { MODULES, type ModuleContext } from './modules.ts';
+import { COMPANIONS, MODULES, type ModuleContext } from './modules.ts';
 import { pipe, type PipeTarget } from './proxy.ts';
 
 const config = loadConfig();
@@ -43,7 +43,17 @@ const context: ModuleContext = {
   dataDir: config.dataDir,
   lewlm: { baseUrl: config.lewlmBaseUrl, apiKey: config.lewlmApiKey },
 };
-const modules = MODULES.map((build) => build(context));
+
+// A companion that is asked for but not registered is a typo, and starting
+// without it would look like the companion being down. Refuse instead.
+const unknown = config.companions.filter((id) => !(id in COMPANIONS));
+if (unknown.length > 0) {
+  const known = Object.keys(COMPANIONS).join(', ') || 'none';
+  throw new Error(`CHAP_COMPANIONS names ${unknown.join(', ')}; registered companions: ${known}`);
+}
+const modules = [...MODULES, ...config.companions.map((id) => COMPANIONS[id]!)].map((build) =>
+  build(context),
+);
 
 /**
  * Chap's own liveness, plus what each module says about itself.
@@ -58,6 +68,8 @@ app.get('/_chap/health', async (c) =>
     service: 'chap-server',
     lewlm_base_url: config.lewlmBaseUrl,
     api_key_configured: Boolean(config.lewlmApiKey),
+    /** Every registered companion, on or off, so Settings can say how to turn one on. */
+    companions_available: Object.keys(COMPANIONS),
     modules: await Promise.all(
       modules.map(async (module) => ({
         id: module.id,

@@ -6,7 +6,7 @@
  * whatever comes next — attaches through two registry files and may be deleted
  * by removing two lines. That claim is only true while core stays blind to what
  * is installed, and blindness is not something a codebase keeps by intention.
- * The first `if (module.id === 'docktizo')` in a core file goes unnoticed, the
+ * The first `if (module.id === 'some-module')` in a core file goes unnoticed, the
  * second is precedent, and within a month Chap is a bespoke console again.
  *
  * Four things are checked, in the order they tend to break:

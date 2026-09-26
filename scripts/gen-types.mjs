@@ -16,15 +16,15 @@
  * supplies. So the two generators never overlap and nothing needs deduping.
  * If that ever stops being true, step 2's collision assertion fails loudly.
  *
- * A second target exists for DocKtizo, which publishes no bundle and no
- * committed spec at all — see the DocKtizo section below for what that costs.
+ * A second, optional target exists for the DocKtizo companion module — see the
+ * DocKtizo section below. Nothing in the default run needs DocKtizo.
  *
  * Usage:
  *   node scripts/gen-types.mjs                       # OpenAPI from the LewLM venv
  *   node scripts/gen-types.mjs --openapi url         # ...from a running server
  *   node scripts/gen-types.mjs --openapi file        # ...from vendor/openapi.json
  *   node scripts/gen-types.mjs --check               # regenerate and diff; CI drift gate
- *   node scripts/gen-types.mjs --target docktizo     # the DocKtizo module's types
+ *   node scripts/gen-types.mjs --target docktizo     # the DocKtizo companion's types
  */
 
 import { execFile } from 'node:child_process';
@@ -395,10 +395,16 @@ async function generate() {
 }
 
 // ---------------------------------------------------------------------------
-// DocKtizo
+// DocKtizo (optional companion)
 // ---------------------------------------------------------------------------
 
 /**
+ * DocKtizo is a separate, experimental document-generation service built on
+ * LewLM (github.com/lew-cx/DocKtizo). Chap carries an optional companion module
+ * for it — packages/module-docktizo — and this target refreshes that module's
+ * types. It only runs with `--target docktizo`; the output and the vendored
+ * spec are committed, so nobody else ever needs a DocKtizo checkout.
+ *
  * DocKtizo publishes two documents, and they are exactly complementary — the
  * same shape LewLM's OpenAPI-plus-bundle split has:
  *

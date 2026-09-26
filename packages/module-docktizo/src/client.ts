@@ -1,6 +1,11 @@
 /**
  * DocKtizo, from the browser.
  *
+ * DocKtizo is a separate, experimental document-generation service built on
+ * LewLM (github.com/lew-cx/DocKtizo). This package is an optional Chap
+ * *companion*: off unless `CHAP_COMPANIONS=docktizo`, and nothing in Chap needs
+ * it. See this package's README.md.
+ *
  * Same shape as the collections client: one `call<T>`, thin named methods,
  * nothing clever. Errors are surfaced as DocKtizo's own envelope rather than
  * paraphrased — the whole point of the Generate tab is that a 422 shows you what

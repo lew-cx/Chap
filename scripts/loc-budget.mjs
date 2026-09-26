@@ -9,7 +9,7 @@
  * Every package under packages/ carries its own budget, declared in its own
  * package.json, so this script names none of them and adding a module never
  * edits it. The per-package split is the interesting part: it is what makes
- * "LewLM ships a contract and DocKtizo does not" a difference you can see.
+ * "this upstream's contract is thinner than that one's" a difference you can see.
  *
  * TWO BUDGETS, because they answer different questions.
  *
@@ -24,10 +24,10 @@
  *                it, and that is a decision about scope rather than a symptom of
  *                a bad contract.
  *
- * They used to be one number, and that number said the wrong thing. DocKtizo's
- * integration is 288 lines against module-collections' 268 — nearly the same —
- * while its UI is six times the size, because it reaches into review, revision
- * and migration and collections reaches into one search box. Summed, DocKtizo
+ * They used to be one number, and that number said the wrong thing. The DocKtizo
+ * companion's integration is 288 lines against module-collections' 268 — nearly
+ * the same — while its UI is six times the size, because it reaches into review,
+ * revision and migration and collections reaches into one search box. Summed, it
  * looked three times as expensive to integrate. It is not. Splitting the budget
  * is what stops "we added a tab" from reading as contract debt.
  *

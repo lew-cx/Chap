@@ -4,9 +4,20 @@ How something that is not LewLM attaches to Chap.
 
 Chap is a client for LewLM. That is the one thing about it that is not
 negotiable — delete LewLM and there is no application left. Everything else is a
-module: the retrieval store, the document service, whatever comes next. A
-consumer who wants a chat and operations GUI and nothing else deletes two
-directories and four lines and still has a working, coherent product.
+module, and there are two kinds:
+
+| kind | what it is | on by default | example |
+| --- | --- | --- | --- |
+| **built-in** | a Chap feature built on LewLM alone | yes | `module-collections` — a retrieval store over LewLM's embeddings and reranking |
+| **companion** | an adapter for a *different product* that runs on LewLM, so Chap can test it too | no — `CHAP_COMPANIONS=<id>` | `module-docktizo` — [DocKtizo](../packages/module-docktizo/README.md), an experimental document-generation service |
+
+The split exists so that Chap never depends on anything but LewLM. A companion's
+upstream may be unfinished, private, or simply not running, and none of that can
+be allowed to break the build, the dev server, `npm run proof`, or the gaps
+screen. With no companions switched on, a checkout behaves exactly as if they
+had been deleted. A consumer who wants a chat and operations GUI and nothing else
+can delete every module directory and the registry lines, and still have a
+working, coherent product.
 
 That claim is checked, not asserted. `npm run module:check` fails the build if a
 core file learns a module's name, in the same spirit as `skin:check` — see
@@ -22,13 +33,14 @@ A directory under `packages/`, with two entry points:
 ```
 packages/module-docktizo/
   package.json          exports: { "./server", "./web" };  chap.budget (×2)
+  README.md             what the upstream is, and how to turn the module on
   src/server.ts         (context) => ServerModule
   src/web.tsx           WebModule
   src/client.ts         its own typed client
   src/ui/*.tsx          its screens
   src/generated/*       DO NOT EDIT
   proof.ts              its own probes, outside src/
-docs/docktizo-gaps.md   what its upstream is missing, and what that costs
+  GAPS.md               what its upstream is missing, and what that costs
 ```
 
 The two subpath exports keep the halves apart: the server process never loads
@@ -46,21 +58,31 @@ relative path.
 
 ## Registering one
 
-Two lines. One in `server/src/modules.ts`:
+Two lines, one in each registry. A built-in goes in `MODULES`; a companion goes
+in `COMPANIONS`, keyed by the id `CHAP_COMPANIONS` will use. In
+`server/src/modules.ts`:
 
 ```ts
-import { docktizo } from '@chap/module-docktizo/server';
-export const MODULES: ServerModuleFactory[] = [collectionsModule, docktizo];
+export const MODULES: ServerModuleFactory[] = [collectionsModule];
+export const COMPANIONS: Readonly<Record<string, ServerModuleFactory>> = { docktizo };
 ```
 
-and one in `web/src/modules.ts`:
+and in `web/src/modules.ts`:
 
 ```ts
-import { docktizo } from '@chap/module-docktizo/web';
-export const MODULES: WebModule[] = [collections, docktizo];
+export const MODULES: WebModule[] = [collections];
+export const COMPANIONS: WebModule[] = [docktizo];
 ```
 
 Then `npm install`, which creates the workspace symlink. There is no third place.
+
+A companion that is not named in `CHAP_COMPANIONS` is never built on the server.
+Its routes do not exist, it is absent from `/_chap/health`, and the browser hides
+its screens and tabs. Settings → modules lists it as available and says how to
+turn it on. Naming an unregistered id is refused at startup, so a typo cannot
+look like an upstream being down. A companion's proof is declared in the root
+`package.json` as `proof:<id>`, and `npm run gen:gaps` runs it only when that
+companion is switched on.
 Removing a module is those two lines and `rm -rf`; the `packages/*` workspace glob
 and the wildcard `paths`/alias entries name no module and never need editing.
 
@@ -87,7 +109,7 @@ structurally where it is registered, which is the only place a mismatch matters.
 
 `proxy.headers` is how a credential reaches an upstream without reaching the
 browser. It is worth noticing what this buys beyond secrecy: because the proxy
-holds DocKtizo's bearer, an artifact download is `<a href="/dk/v1/artifacts/…"
+holds the DocKtizo companion's bearer, an artifact download is `<a href="/dk/v1/artifacts/…"
 download>` — no blob, no `Content-Disposition` parsing, no token in the bundle.
 
 ## Readiness is discovered, not declared
@@ -102,7 +124,7 @@ carry the upstream's own words.
 still appears in the nav and renders a `CapabilityNotice` inside — hiding it would
 turn an environment fact into a missing feature.
 
-The payoff is concrete. A DocKtizo with authentication switched off answers its own
+The payoff is concrete. A DocKtizo (the companion) with authentication switched off answers its own
 `/healthz` with `ok`, because that route checks nothing. Chap says:
 
 > **DocKtizo is not available** — authentication is not configured
@@ -183,7 +205,7 @@ because the upstream made it work twice as hard.
 
 A budget that only ever goes down would be measuring effort, not contract. This
 one measures both, which is why raising it needs an argument recorded in a gaps
-document, and why `docs/docktizo-gaps.md` ends with the argument for the last
+document, and why `packages/module-docktizo/GAPS.md` ends with the argument for the last
 raise.
 
 That is what a gaps document is for, and it is why a module owns one rather than
@@ -191,19 +213,23 @@ filing against a shared list. Delete the module and its gaps go with it.
 
 ## Adding a module
 
-1. `packages/module-<id>/package.json` with the two exports and a `chap.budget`
+1. Decide which kind it is. If it only needs LewLM, it is built-in. If it fronts
+   another service, it is a companion.
+2. `packages/module-<id>/package.json` with the two exports and a `chap.budget`
    naming both an `integration` and a `ui` figure.
-2. `src/server.ts` exporting a factory. Give it a `probe` if it fronts something
+3. `src/server.ts` exporting a factory. Give it a `probe` if it fronts something
    that can be down or misconfigured; leave it off if the only honest answer is
    "yes".
-3. Register the server half, `npm install`, and check `/_chap/health`. Do this
+4. Register the server half, `npm install`, and check `/_chap/health`. Do this
    before writing any UI — it is the cheapest possible proof the seam works.
-4. Generate types from the upstream's contract rather than hand-writing them.
+5. Generate types from the upstream's contract rather than hand-writing them.
    `scripts/gen-types.mjs --target <name>` is the pattern; vendor the spec so a
    machine without the upstream checked out can still build.
-5. `src/web.tsx` and the screens.
-6. `proof.ts` and `docs/<id>-gaps.md`, if the upstream has gaps worth arguing
-   about. It will.
-7. Set both budgets from the measured numbers. If `integration` is high, the gaps
+6. `src/web.tsx` and the screens.
+7. `proof.ts` (declared as `proof:<id>` in the root `package.json`) and a
+   `GAPS.md` in the package, if the upstream has gaps worth arguing about. It will.
+   A companion also gets a `README.md` that says, first, what the upstream *is*
+   — a reader of Chap should never have to guess.
+8. Set both budgets from the measured numbers. If `integration` is high, the gaps
    document should already explain why; `ui` only has to be a size the screen
    earns.

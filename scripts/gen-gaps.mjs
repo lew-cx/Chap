@@ -9,12 +9,13 @@
  * project's central claim is honest, so it is the last place a duplicated copy
  * of a fact belongs.
  *
- * Same argument that generated `PIPELINE_ORDER` from DocKtizo's contract after
- * the hand-written copy turned out to be wrong: if a number can be observed, it
- * should not also be typed.
+ * If a number can be observed, it should not also be typed.
  *
- * Every upstream is proved the same way, so every upstream contributes here —
- * this script names no proof of its own, it runs the ones package.json declares.
+ * `npm run proof` (LewLM) always runs — LewLM is what Chap exists to prove.
+ * A companion's proof, declared in package.json as `proof:<companion id>`, runs
+ * only when that companion is switched on with `CHAP_COMPANIONS` (read from the
+ * environment or `.env`). So the default run needs LewLM and nothing else, and
+ * this script still names no proof of its own.
  *
  * Usage:
  *   node scripts/gen-gaps.mjs            # run every proof, write the module
@@ -35,10 +36,23 @@ const execFileAsync = promisify(execFile);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, 'web/src/generated/proof.ts');
 
-/** Every `proof*` script in package.json, in declaration order. */
+/** Companion ids switched on for this run, the same way the server reads them. */
+function companions() {
+  try {
+    process.loadEnvFile(join(ROOT, '.env'));
+  } catch {
+    // No .env is the normal case for a fresh checkout.
+  }
+  return new Set((process.env.CHAP_COMPANIONS ?? '').split(/[\s,]+/).filter(Boolean));
+}
+
+/** `proof`, then `proof:<id>` for each enabled companion, in declaration order. */
 async function proofScripts() {
   const manifest = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
-  return Object.keys(manifest.scripts).filter((name) => /^proof(:|$)/.test(name));
+  const enabled = companions();
+  return Object.keys(manifest.scripts).filter(
+    (name) => name === 'proof' || (name.startsWith('proof:') && enabled.has(name.slice(6))),
+  );
 }
 
 /** Run one proof and read back the JSON it emitted. */
@@ -137,13 +151,14 @@ function emit(runs) {
  * Refuse to write a screen from a proof that never reached its upstream.
  *
  * A proof run against an absent service still emits a full result set, and it
- * looks like evidence: `proof:dk` with DocKtizo down reports five FAILs whose
- * note is `fetch failed`, then five GAPs noted `not verifiable without a
- * working token`. Written out, those become five *open gaps against DocKtizo*
- * on the Settings screen, and the suite line reads `0 passed · 5 failed`. The
- * same run also flipped LewLM's G27 from fixed to open, because this host has
- * no synthesis model it can load — the audio bundles here are `mlx_audio`, and
- * MLX does not exist off Apple silicon.
+ * looks like evidence: `proof:docktizo` with that companion's service down
+ * reports five FAILs whose note is `fetch failed`, then five GAPs noted `not
+ * verifiable without a working token`. Written out, those become five *open
+ * gaps* against a service that was simply not running, on the Settings screen,
+ * and the suite line reads `0 passed · 5 failed`. The same run also flipped
+ * LewLM's G27 from fixed to open, because this host has no synthesis model it
+ * can load — the audio bundles here are `mlx_audio`, and MLX does not exist
+ * off Apple silicon.
  *
  * None of that is a fact about an upstream's contract. It is a fact about this
  * machine, and the screen it would land on is the one a visitor reads to judge

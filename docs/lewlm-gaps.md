@@ -40,17 +40,19 @@ The Settings → Gaps screen is generated from the proofs by `npm run gen:gaps`,
 so it cannot claim a gap the proof does not confirm or miss one it does. It used
 to be a hand-kept array and had drifted from both this document and the proof.
 
-**It has not been regenerated since G33.** `gen:gaps` runs every proof,
-DocKtizo's included, and DocKtizo was not running on the Windows host; it
-refuses rather than publish a half-run, as it should. Run it with DocKtizo up,
-and with `LEWLM_BASE_URL`/`LEWLM_FIXTURE_CONTROL` pointing at the fixture
-harness, to bring the screen level with this document.
+It was last regenerated on 2026-09-26 against the fixture harness
+(`LEWLM_BASE_URL=http://127.0.0.1:8081 LEWLM_FIXTURE_CONTROL=http://127.0.0.1:8099`),
+and reads `21 passed · 0 failed · 1 gap · 28 fixed`. The one line is G30, as
+above. For a while it could not be regenerated at all, because `gen:gaps` ran
+every proof, including the optional DocKtizo companion's, and refused a
+half-run while DocKtizo was down. Companion proofs now join only when
+`CHAP_COMPANIONS` names them, so the default run needs LewLM alone.
 
 **The score line is host-dependent, and the gap count is not.** On the earlier
 2026-08-24 run the same proof on Windows reported `20 passed · 1 failed`, because
 LewLM serves audio only through `mlx_audio` and MLX is Apple silicon only, so the
 speech and transcription probes had no model to run against. Contract parity was
-identical. `npm run gen:gaps` is only meaningful with every upstream running; it
+identical. `npm run gen:gaps` is only meaningful with every upstream it proves running; it
 refuses rather than writing gaps an incomplete host invented. See
 [cross-platform.md](cross-platform.md).
 
@@ -168,11 +170,12 @@ Verified against a local LewLM on 2026-08-11: `maxLength: 2000` answers 200 with
 422 naming `root`; `maxLength: 200` answers 200 with no relaxation and
 `validation: valid`; `/v1/health` is 200 after each.
 
-The shape of DocKtizo's `StatusReportSpec` — seven fields at `maxLength: 5000` —
+The shape of `StatusReportSpec` in DocKtizo (the optional companion in
+`packages/module-docktizo`) — seven fields at `maxLength: 5000` —
 was checked directly against the packaged llama.cpp and is accepted now where it
 was refused before. That removes the blocker; it does not prove the integration
-produces a document, so `packages/module-docktizo` and `docs/docktizo-gaps.md`
-want a re-run rather than an edit.
+produces a document, so `packages/module-docktizo` and its `GAPS.md` want a
+re-run rather than an edit.
 
 ### Why the proxy stayed
 

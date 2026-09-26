@@ -2,6 +2,11 @@
 
 What DocKtizo needs so its Chap module can stay thin.
 
+> DocKtizo is a separate, experimental document-generation service built on
+> LewLM. This module is an optional Chap companion — see [README.md](README.md).
+> Chap's own gaps against LewLM are in
+> [docs/lewlm-gaps.md](../../docs/lewlm-gaps.md).
+
 Chap's premise is that a GUI needs almost no application code when the service
 behind it does the work. `docs/lewlm-gaps.md` tracks where that breaks for LewLM.
 This document tracks the same thing for DocKtizo, and it exists as a separate
@@ -11,7 +16,7 @@ notice.
 
 Each open entry states what Chap needs, what is missing, a proposed shape, and
 **the cost of the workaround**, because the cost is the argument. Every entry has
-a probe in `npm run proof:dk` that flips from `gap` to `FIXD` when DocKtizo gains
+a probe in `npm run proof:docktizo` that flips from `gap` to `FIXD` when DocKtizo gains
 the capability, which is how we learn a workaround can be deleted.
 
 Verified against DocKtizo `0.1.0a0` (`0021_workflow_version_migrations`) on
@@ -64,7 +69,7 @@ None.
 | **D6** | A generate tab that would happily submit a request that could not succeed, and a failure arriving several stages later with a code describing the symptom. | Submit-time rejection with `provider_capability_missing` and `missing_capabilities` — the option this document argued for — plus per-workflow coverage in the readiness report. Chap now warns *before* the button, through the same `CapabilityNotice` it uses for LewLM. That component was already there; it just finally had something to read. |
 | — | `issue_count: N` and no indication of which N. | Index-aligned `issue_locations` and `issue_codes`, values and human messages deliberately withheld. The generate tab renders them as a two-column table: field, problem. Submitting a status report with only `project_name` now says `reporting_period missing · reporting_date missing · facts missing` instead of "3". |
 | — | A second way to read the same log. Chap's client had both a paged `events()` and the stream. | Just the stream. The two are interchangeable by design, so keeping both was Chap storing a choice nobody makes. |
-| **D7** | The migrate panel's target chooser, which offered *every other installed version of the same document type* — a superset — because the registered source-to-target pairs were not published. It could present a migration that could not happen, and the user found out from a `422 unsupported_workflow_migration` after choosing. `npm run proof:dk` carried the same guess as a loop that submitted previews until one was not refused. | `migration_targets` on `DocumentTypeResponse`, which is `WorkflowMigrationRegistry.targets_for()` — the table DocKtizo was already consulting. The chooser reads it, the proof reads it, and a published target the preview then refuses is now a **failure** rather than a skipped candidate, because the two disagreeing is worth knowing. |
+| **D7** | The migrate panel's target chooser, which offered *every other installed version of the same document type* — a superset — because the registered source-to-target pairs were not published. It could present a migration that could not happen, and the user found out from a `422 unsupported_workflow_migration` after choosing. `npm run proof:docktizo` carried the same guess as a loop that submitted previews until one was not refused. | `migration_targets` on `DocumentTypeResponse`, which is `WorkflowMigrationRegistry.targets_for()` — the table DocKtizo was already consulting. The chooser reads it, the proof reads it, and a published target the preview then refuses is now a **failure** rather than a skipped candidate, because the two disagreeing is worth knowing. |
 | **D8** | The document tab's opening screen: a box asking you to paste a `document_id`. Reloading the page made the work unreachable unless the id had been written down. | `GET /v1/documents`, cursor-paged and workspace-scoped. The tab opens on a catalogue — title, workflow, revision, review state — and a row is the way in. The proof also stopped depending on a working model: its lifecycle section can now prove against any document the workspace already holds rather than only one it just made. |
 
 ---
@@ -240,7 +245,7 @@ different bug.
 Three diagnoses, three builds, and the constant is that the tell was in the first
 run each time and the error code named the symptom rather than the cause.
 
-**An artifact now renders end to end on this host.** `npm run proof:dk` submits a
+**An artifact now renders end to end on this host.** `npm run proof:docktizo` submits a
 `status_report.v1`, follows the event stream to `awaiting_review`, and the
 document tab downloads the rendered `.docx` through the proxy. Approving it
 through the UI moves the review state to `approved` and the execution state to

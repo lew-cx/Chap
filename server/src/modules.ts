@@ -2,8 +2,15 @@
  * What a module is, on the server side, and the registry of them.
  *
  * LewLM is core and cannot be removed — it is the thing Chap is a client for.
- * Everything else attaches here: a document service, a vector store, whatever
- * comes next. Core knows this shape and nothing else. It does not know a
+ * Everything else attaches here, in one of two lists:
+ *
+ *   - MODULES: features Chap builds on LewLM alone. Always on.
+ *   - COMPANIONS: adapters for *other* products that run on LewLM, so Chap can
+ *     be used to test them too. Off unless `CHAP_COMPANIONS` names them. Chap
+ *     needs none of them, and none of those products need to exist for Chap to
+ *     build, run or prove anything about LewLM.
+ *
+ * Core knows this shape and nothing else. It does not know a
  * module's name, its routes, its environment or its upstream, and
  * `scripts/module-check.mjs` fails the build the moment it does.
  *
@@ -58,5 +65,15 @@ export interface ServerModule {
 
 export type ServerModuleFactory = (context: ModuleContext) => ServerModule;
 
-/** The registry. One line per module; core mentions modules nowhere else. */
-export const MODULES: ServerModuleFactory[] = [collectionsModule, docktizo];
+/** Built-in modules. One line per module; core mentions modules nowhere else. */
+export const MODULES: ServerModuleFactory[] = [collectionsModule];
+
+/**
+ * Companions, keyed by the id `CHAP_COMPANIONS` uses to turn one on.
+ *
+ * `docktizo` fronts DocKtizo (github.com/lew-cx/DocKtizo), a separate and
+ * experimental document-generation service built on LewLM by the same author.
+ * It is here as a worked example of testing a LewLM-based product through Chap,
+ * not because Chap depends on it. See packages/module-docktizo/README.md.
+ */
+export const COMPANIONS: Readonly<Record<string, ServerModuleFactory>> = { docktizo };

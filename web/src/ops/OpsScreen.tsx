@@ -7,7 +7,7 @@
  */
 
 import { Screen } from '../components/Screen.tsx';
-import { moduleTabs } from '../modules.ts';
+import { useModuleTabs } from '../modules.ts';
 import { Events } from './Events.tsx';
 import { Jobs } from './Jobs.tsx';
 import { Models } from './Models.tsx';
@@ -15,6 +15,7 @@ import { Overview } from './Overview.tsx';
 import { Runtime } from './Runtime.tsx';
 
 export function OpsScreen() {
+  const moduleTabs = useModuleTabs('ops');
   return (
     <Screen
       tabs={[
@@ -23,7 +24,7 @@ export function OpsScreen() {
         { id: 'runtime', component: Runtime },
         { id: 'events', component: Events },
         { id: 'jobs', component: Jobs },
-        ...moduleTabs('ops'),
+        ...moduleTabs,
       ]}
     />
   );

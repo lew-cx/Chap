@@ -11,7 +11,7 @@ import { useState } from 'react';
 import type { DocumentChunk } from '@chap/lewlm';
 
 import { Screen, Section } from '../components/Screen.tsx';
-import { moduleTabs } from '../modules.ts';
+import { useModuleTabs } from '../modules.ts';
 import { useGrounding } from '../store/grounding.ts';
 import { Audio } from './Audio.tsx';
 import { Documents } from './Documents.tsx';
@@ -54,12 +54,13 @@ function DocumentsTab() {
 }
 
 export function LabScreen() {
+  const moduleTabs = useModuleTabs('lab');
   return (
     <Screen
       // Module tabs first: a retrieval module's tab is the one you want open
       // when there is one, and the first tab in the list is the default.
       tabs={[
-        ...moduleTabs('lab'),
+        ...moduleTabs,
         { id: 'semantic', component: Semantic },
         { id: 'documents', component: DocumentsTab },
         { id: 'audio', component: Audio },

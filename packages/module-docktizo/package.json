@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "DocKtizo as a Chap module: sources, generations, documents, review, revisions, migrations and artifacts.",
+  "description": "Optional companion: test DocKtizo, an experimental document-generation service built on LewLM, through Chap. Off unless CHAP_COMPANIONS=docktizo.",
   "exports": {
     "./server": "./src/server.ts",
     "./web": "./src/web.tsx"

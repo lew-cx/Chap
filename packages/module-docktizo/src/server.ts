@@ -1,6 +1,11 @@
 /**
  * DocKtizo, mounted at `/dk`.
  *
+ * DocKtizo is a separate, experimental document-generation service built on
+ * LewLM (github.com/lew-cx/DocKtizo). This package is an optional Chap
+ * *companion*: off unless `CHAP_COMPANIONS=docktizo`, and nothing in Chap needs
+ * it. See this package's README.md.
+ *
  * Nothing here reshapes anything: Chap fronts DocKtizo with the same byte pipe
  * it fronts LewLM with, and the only thing the module adds is the credential.
  * That matters more than it looks — because the bearer is injected here, an

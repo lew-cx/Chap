@@ -1,6 +1,11 @@
 /**
  * DocKtizo's contribution to Chap: one top-level screen, five tabs.
  *
+ * DocKtizo is a separate, experimental document-generation service built on
+ * LewLM (github.com/lew-cx/DocKtizo). This package is an optional Chap
+ * *companion*: off unless `CHAP_COMPANIONS=docktizo`, and nothing in Chap needs
+ * it. See this package's README.md.
+ *
  * The screen reuses Chap's own `Screen` frame rather than inventing a second
  * one, which is the whole point of a module having access to `@/components` —
  * a module should look like the app it is installed into, not like a widget

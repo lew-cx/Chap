@@ -6,7 +6,7 @@ import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { NavItem, StatusDot } from './components/Nav.tsx';
 import { ChatScreen } from './chat/ChatScreen.tsx';
 import { LabScreen } from './lab/LabScreen.tsx';
-import { moduleScreens } from './modules.ts';
+import { useModuleScreens } from './modules.ts';
 import { OpsScreen } from './ops/OpsScreen.tsx';
 import { SettingsScreen } from './settings/SettingsScreen.tsx';
 import { usePolled } from './lib/usePolled.ts';
@@ -18,20 +18,20 @@ import { registerSkinShortcut } from './store/skin.ts';
 /**
  * The primary nav. The four screens Chap owns, then whatever the registry adds.
  *
- * The spread is the only thing in this file that knows modules exist, and it
- * knows nothing about which ones — see modules.ts.
+ * The spread in App is the only thing in this file that knows modules exist, and
+ * it knows nothing about which ones — see modules.ts.
  */
-const SCREENS: { id: string; label: string; component: ComponentType }[] = [
+const CORE_SCREENS: { id: string; label: string; component: ComponentType }[] = [
   { id: 'chat', label: 'Chat', component: ChatScreen },
   { id: 'ops', label: 'Ops', component: OpsScreen },
   { id: 'lab', label: 'Lab', component: LabScreen },
   { id: 'settings', label: 'Settings', component: SettingsScreen },
-  ...moduleScreens(),
 ];
 
 export function App() {
   const screen = useNav((state) => state.screen);
   const go = useNav((state) => state.go);
+  const SCREENS = [...CORE_SCREENS, ...useModuleScreens()];
 
   useEffect(registerSkinShortcut, []);
   useEffect(registerNavHistory, []);

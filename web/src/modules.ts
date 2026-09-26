@@ -18,6 +18,7 @@ import { collections } from '@chap/module-collections/web';
 import { docktizo } from '@chap/module-docktizo/web';
 
 import { ModuleGate } from './components/ModuleGate.tsx';
+import { useModuleList } from './lib/useModules.ts';
 import type { ScreenTab } from './components/Screen.tsx';
 
 /** The screens Chap owns. A module may add tabs to any of them. */
@@ -32,12 +33,22 @@ export interface WebModule {
   tabs?: readonly (ScreenTab & { screen: HostScreen })[];
 }
 
-/** The registry. One line per module. */
-export const MODULES: WebModule[] = [collections, docktizo];
+/** Built-in modules: features Chap builds on LewLM alone. Always shown. */
+export const MODULES: WebModule[] = [collections];
 
 /**
- * Wrap once, here at module scope. Building the wrapper inside `moduleTabs()`
- * would give it a fresh component identity on every render of the parent screen,
+ * Companions: adapters for other products that run on LewLM. Shown only when
+ * the server reports one as enabled (`CHAP_COMPANIONS`), so a checkout that has
+ * never heard of them looks exactly like one where they were deleted.
+ *
+ * `docktizo` is DocKtizo, an experimental document-generation service built on
+ * LewLM. See packages/module-docktizo/README.md.
+ */
+export const COMPANIONS: WebModule[] = [docktizo];
+
+/**
+ * Wrap once, here at module scope. Building the wrapper inside a hook would
+ * give it a fresh component identity on every render of the parent screen,
  * which remounts the tab and throws away its state on every keystroke.
  */
 const gate =
@@ -45,17 +56,39 @@ const gate =
   () =>
     createElement(ModuleGate, { id, component });
 
-const TABS = MODULES.flatMap((module) =>
-  (module.tabs ?? []).map((tab) => ({ ...tab, component: gate(module.id, tab.component) })),
+const ALL = [
+  ...MODULES.map((module) => ({ module, companion: false })),
+  ...COMPANIONS.map((module) => ({ module, companion: true })),
+];
+
+const TABS = ALL.flatMap(({ module, companion }) =>
+  (module.tabs ?? []).map((tab) => ({
+    ...tab,
+    moduleId: module.id,
+    companion,
+    component: gate(module.id, tab.component),
+  })),
 );
 
-const SCREENS = MODULES.filter((module) => module.screen != null).map((module) => ({
+const SCREENS = ALL.filter(({ module }) => module.screen != null).map(({ module, companion }) => ({
   id: module.id,
   label: module.label,
+  companion,
   component: gate(module.id, module.screen!),
 }));
 
-export const moduleTabs = (screen: HostScreen): ScreenTab[] =>
-  TABS.filter((tab) => tab.screen === screen);
+/** Built-ins always; a companion only once the server says it is switched on. */
+function useVisible(): (id: string, companion: boolean) => boolean {
+  const enabled = new Set(useModuleList().map((module) => module.id));
+  return (id, companion) => !companion || enabled.has(id);
+}
 
-export const moduleScreens = () => SCREENS;
+export function useModuleTabs(screen: HostScreen): ScreenTab[] {
+  const visible = useVisible();
+  return TABS.filter((tab) => tab.screen === screen && visible(tab.moduleId, tab.companion));
+}
+
+export function useModuleScreens(): { id: string; label: string; component: ComponentType }[] {
+  const visible = useVisible();
+  return SCREENS.filter((screen) => visible(screen.id, screen.companion));
+}

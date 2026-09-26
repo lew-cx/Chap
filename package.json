@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "GUI test bench and showroom for LewLM and DocKtizo",
+  "description": "GUI test bench and showroom for LewLM, and for products built on it",
   "workspaces": [
     "packages/*",
     "server",
@@ -23,7 +23,7 @@
     "loc:budget": "node scripts/loc-budget.mjs",
     "module:check": "node scripts/module-check.mjs",
     "proof": "tsx --env-file-if-exists=.env scripts/proof.ts",
-    "proof:dk": "tsx --env-file-if-exists=.env packages/module-docktizo/proof.ts",
+    "proof:docktizo": "tsx --env-file-if-exists=.env packages/module-docktizo/proof.ts",
     "test": "tsx --test packages/lewlm/src/stream.test.ts packages/lewlm/src/events.test.ts packages/module-collections/src/vectors.test.ts web/src/lib/sentences.test.ts web/src/lib/dictation.test.ts",
     "typecheck": "tsc -b --pretty",
     "skin:check": "node scripts/skin-check.mjs",

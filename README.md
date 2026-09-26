@@ -1,10 +1,16 @@
 # Chap
 
-A GUI test bench and showroom for [LewLM](../LewLM), and a place to attach
-whatever else you run beside it.
+A GUI test bench, showroom and reference client for
+[LewLM](https://github.com/lew-cx/LewLM).
 
-Chap exists to show how little application code a full-featured chat and
-operations interface needs when the backend does the work.
+If you are building on LewLM, Chap is the place to read how a client is meant to
+use it. It covers streaming on both chat surfaces, the event bus, structured
+output, tool calls, ingestion, retrieval, speech in and out, and the typed error
+envelope. All of it is written against LewLM's published contract, with nothing
+guessed.
+
+Chap also shows how little application code a full chat and operations interface
+needs when the backend does the work:
 
 ```
   hand-written LewLM integration code
@@ -21,216 +27,38 @@ operations interface needs when the backend does the work.
     711  lewlm integration   (budget 900)
 ```
 
-That number is checked by `npm run loc:budget`. It buys a full chat surface,
-a five-tab operations console, a lab over every non-chat surface, sessions, a live
-event explorer, and replies spoken aloud as they stream. Everything else Chap
-knows about LewLM — 57 routes, 293 schemas, 55 event types, 41 error codes — is
-**generated from LewLM's own published contract**, never hand-written.
+`npm run loc:budget` checks that number. It pays for a full chat surface, a
+five-tab operations console, a lab covering every non-chat surface, sessions, a
+live event explorer, and replies spoken aloud as they stream. Everything else
+Chap knows about LewLM (57 routes, 293 schemas, 55 event types, 41 error codes)
+is **generated from LewLM's own published contract**. None of it is written by
+hand.
 
-## LewLM is core. Everything else attaches.
+## Where to start reading
 
-Chap is a LewLM client, and that is the part you cannot remove. Everything else
-is a module, including the vector store that used to be the one piece of real
-domain code in this repo:
+| to see how to…                                   | read                                                    |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| stream a chat or response, and fold the deltas   | [packages/lewlm/src/stream.ts](packages/lewlm/src/stream.ts) |
+| subscribe to `/v1/events` with server-side filters | [packages/lewlm/src/events.ts](packages/lewlm/src/events.ts) |
+| turn every LewLM error into one typed value      | [packages/lewlm/src/errors.ts](packages/lewlm/src/errors.ts) |
+| generate types from LewLM's contract             | [scripts/gen-types.mjs](scripts/gen-types.mjs)          |
+| prove a LewLM server does what it says, headless | [scripts/proof.ts](scripts/proof.ts)                    |
+| proxy LewLM without transforming a byte          | [server/src/proxy.ts](server/src/proxy.ts)              |
+| build a request from the chat composer's state   | [web/src/chat/request.ts](web/src/chat/request.ts)      |
+| embed and rerank against LewLM for retrieval     | [packages/module-collections/](packages/module-collections/) |
 
-```
-                       integration     ui      budgets
-    lewlm                      711      —      900 / none
-    module-collections         268     210     300 / 260
-    module-docktizo            288    1221     340 / 1400
-  -----                      -----   -----
-                             1,267   1,431     2,698 hand-written in total
-```
-
-A consumer who wants a chat and operations GUI deletes two directories and four
-lines and still has a coherent product. `npm run module:check` fails the build if
-a core file learns a module's name, so that stays true rather than merely being
-claimed. See [docs/modules.md](docs/modules.md).
-
-**Two budgets, because they answer different questions.** `integration` is what
-it costs to *talk* to an upstream — the client, the store, the server half, the
-types. `ui` is what it costs to *show* it. A file that renders is `.tsx` and a
-file that talks is `.ts`, so the split needs no directory discipline and JSX
-cannot hide on the wrong side of it.
-
-They used to be one number, and that number said the wrong thing. DocKtizo's
-integration is 288 lines against module-collections' 268 — nearly the same —
-while its UI is six times the size, because it reaches into review, revision and
-migration where collections reaches into one search box. Summed, DocKtizo read as
-three times more expensive to integrate. It is not. The line that carries this
-project's argument is the integration one, and it should barely move when a
-screen is added.
-
-The per-package split is the interesting number, and it does not say what you
-would expect. `module-docktizo` opened with six gaps against its upstream; all
-six were closed within a day, and the module got **bigger** — 788 lines to 936.
-The workarounds shrank: a hand-maintained copy of DocKtizo's state machine, a
-2-second poll loop with its own cursor bookkeeping, and a two-call readiness
-probe all went. What replaced them is larger, because each fix made something
-possible that had not been worth building before.
-
-It happened again, at four times the size. DocKtizo grew a second half —
-`executive_memo.v1`, `proposal.v1`, an incompatible `status_report.v2`, and
-explicit workflow-version migration — and the module went 936 to about 1,500
-lines reaching all of it. Almost all of that is UI; its integration half barely
-moved. Not one of those lines is a workaround. They are review
-decisions, revision history, targeted revisions, manual overrides, and a
-migration preview that reports what a version change would derive and what it
-would drop before anything is written.
-
-Reaching that far opened two new gaps, and both were DocKtizo knowing an answer
-and publishing no way to ask for it — which registered version a document may
-migrate onto, and what documents a workspace holds. Both were closed within
-hours, and this time the fixes came back the other way: the migrate panel stopped
-offering migrations that could not happen, the document tab stopped being a box
-asking you to paste an id, and the proof stopped needing a working model to have
-anything to prove against.
-
-So a closed gap does not always return lines, and neither does a capable
-upstream. Sometimes what comes back is reach, and the count of things Chap has to
-guess about its upstream — which is what
-[docs/docktizo-gaps.md](docs/docktizo-gaps.md) actually measures — is the number
-worth watching instead. It has been to zero twice now.
-
-That number goes *down* when LewLM gains a capability. Wiring `tool_calls` into
-LewLM deleted ~150 lines Chap would otherwise have written; normalizing its
-OpenAPI deleted 60 from the type generator; byte uploads on `documents.ingest`
-deleted a whole file-staging subsystem before it was built.
-
-When the number goes up, it is usually because LewLM is missing something. Those
-are tracked in [docs/lewlm-gaps.md](docs/lewlm-gaps.md), and each entry has a
-probe in `npm run proof` that flips from `gap` to `FIXD` when LewLM gains the
-capability — telling us which workaround to delete.
-
-```
-  24 passed · 0 failed · 5 gaps confirmed · 17 gaps fixed upstream
-```
-
-Two of the five `gap` lines are environment rather than contract — CORS is off
-on this server, and the runtime honors none of the sampling controls it was sent,
-both reported faithfully. G32 and G33 are new and small, and both are the same
-shape: a value Chap had quietly filled in because the contract does not publish
-one. The largest real entry is G13, and it is half of what it was:
-
-`/v1/events` takes `types`, `scope`, `request_id` and `model_id`, applied at the
-bus before an event is queued, so the events explorer's filters are now *sent*
-rather than applied on arrival and the token flood never crosses the wire.
-Replay is still missing: frames carry no `id:`, so a reconnect has no cursor and
-Chap still marks the gap in the timeline rather than pretending it was continuous.
-
-G31 closed the same day it was opened. A runnable model whose context length
-LewLM never recorded was refused any request it estimated at 4,096 tokens or
-more, and DocKtizo's default structured-generation budget is exactly 4,096 — so
-every document generation on this host was refused before a prompt was written.
-LewLM now reads the window out of the GGUF header (`null` → `131072`), scores
-against what the runtime will actually reserve rather than what the model
-advertises, and makes the unmeasured ceiling a setting it names in the refusal.
-
-G29 closed earlier the same day: the MLX runtime streams incrementally now, so
-spoken replies get the head start they were built for. Chap deleted nothing to
-collect that, which is the point — the feature was built against the contract and
-the contract caught up. `npm run proof` synthesizes a phrase and transcribes it
-back to prove both audio ends in one pass.
-
-## Spoken replies
-
-The `speak` toggle in the composer reads a reply aloud while it is still being
-generated. The reply is cut into sentences as the tokens arrive and each one is
-synthesized when it closes, so the first words play about a sentence after the
-model starts rather than a turn later. Playback is scheduled on the Web Audio
-clock so the clips abut without a gap.
-
-That head start is only as good as the stream underneath it, and for a while it
-was not: on the two MLX bundles the whole reply arrived in one delta for some
-prompts, so every sentence closed at once and the feature degraded to reading a
-finished reply. That was G29. It is fixed upstream, and nothing in Chap changed
-to collect the fix.
-
-None of it needed a LewLM change — one `POST /v1/audio/speech` per sentence and
-the existing typed client. All of it is in `web/`, because segmentation, jitter
-and playback are browser concerns rather than contract concerns; that is also why
-the integration budget above did not move.
-
-It started with two controls that existed only because of gaps — a model select
-and a free-text voice box. Both are gone: LewLM now names the synthesis model
-itself (G25) and lists the voices it can use (G27), so the drawer has one control
-and a readout.
-
-## The document lifecycle
-
-DocKtizo's own pipeline ends at `awaiting_review`, and for a while so did Chap's
-screen: the run finished, the artifact existed, and nothing in the UI could
-approve it, send it back, correct it, or move it onto a newer version of its
-workflow. All four were routes with no caller.
-
-The document tab is the other half. It opens on the document a generation
-produced — not the run, which is over, but the durable thing with a head
-revision, a review state and a version history — and offers what DocKtizo offers
-against it:
-
-- **Review.** Approve, reject, or request changes, with the decision history
-  above the buttons. The buttons stay live in every state; DocKtizo owns the
-  transition table and answers an illegal decision with
-  `invalid_approval_transition`, which is shown as it arrived. Greying them out
-  would be Chap restating that table in TypeScript and being wrong about it
-  eventually.
-- **Revise.** A targeted revision names the fields to redo and hands the workflow
-  instructions; a manual override supplies the values outright and runs no model.
-  Both are new immutable revisions, and the one above is never rewritten.
-- **Migrate.** `status_report.v1` documents stay on `status_report.v1` until
-  someone asks — nothing in DocKtizo resolves to "the latest", and Chap does not
-  invent it. Asking is a preview first: DocKtizo runs the registered mapping,
-  validates the candidate under the target version's complete rules, writes
-  nothing, and reports every consequence as a coded notice. The ones that must be
-  acknowledged are checkboxes, and they are *DocKtizo's* list —
-  `required_acknowledgements`, not Chap's reading of the severities beside them.
-
-```
-  policy     status_report.v1-to-v2.1.0     loses content  no
-  template   workflow_default               candidate      invalid
-
-  status_report.v2 would reject this document: schema_too_short
-
-  warning  overall_status  v1 records no headline judgement, so overall_status  [x]
-                           was derived from the migrated milestones and risks
-  info     template_id     v1 templates are not compatible with v2              —
-```
-
-That last line is the argument for previewing at all: the mapping succeeded and
-the result still would not pass, so the submit would be refused. Knowing which
-rule turns "try again" into "fix this first".
-
-## Two skins, one component tree
-
-Chap runs in two aesthetics, switchable with `Cmd+\` — `Ctrl+\` off Apple
-hardware, which is also what the control labels itself as there:
-
-- **Bench** — dense dark instrument panel with a live telemetry rail. The
-  working environment.
-- **Showroom** — spacious translucent glass. The display environment.
-
-They are not two apps. One component tree reads one token layer; the skin swaps
-the token values. See [docs/skins.md](docs/skins.md).
+`packages/lewlm` has zero runtime dependencies, no React, and runs in both the
+browser and Node.
 
 ## Running it
 
-Chap needs a LewLM server. Chap's own server proxies to it, so the SPA and the
-API share one origin and no credential — LewLM's or a module's — reaches the
-browser.
-
-Modules are optional. With none registered, everything below still works and
-Chap is a LewLM client and nothing else.
-
-LewLM now supports CORS, so talking to it directly works too — start it with
-`LEWLM_CORS_ENABLED=true` and `LEWLM_CORS_ALLOW_ORIGINS='["http://localhost:5173"]'`.
+Chap needs a LewLM server and nothing else. Chap's own server proxies to it, so
+the SPA and the API share one origin and no credential reaches the browser.
 
 ```bash
-# 1. LewLM
+# 1. LewLM (see its README)
 cd ../LewLM
-.venv/bin/lewlm serve
-
- #1b. LewLM on windows
-cd ../LewLM
+.venv/bin/lewlm serve                                # or, on Windows with a GPU:
 docker compose --profile gpu up -d lewlm-cuda
 
 # 2. Chap
@@ -240,53 +68,62 @@ npm run dev            # http://localhost:5173
 ```
 
 Copy `.env.example` to `.env` to point at a different LewLM or supply an API key.
-The key stays in the server process; the browser never receives it.
+The key stays in the server process, and the browser never receives it.
+
+LewLM supports CORS, so the browser can also talk to it directly. Start it with
+`LEWLM_CORS_ENABLED=true` and `LEWLM_CORS_ALLOW_ORIGINS='["http://localhost:5173"]'`.
 
 ### On another machine
 
-`npm run doctor` answers whether a machine can run Chap before anything else is
+`npm run doctor` checks whether a machine can run Chap before anything else is
 attempted, and `npm run dev` runs it first. It asks the runtime rather than
-comparing version strings, because the two things Chap depends on arrived
-mid-22 and a Node fractionally short of either fails later, inside a module, as
-something that reads like a Chap bug:
+comparing version strings, because the two things Chap depends on arrived in
+mid-22 and a Node release just short of either fails later, inside a module,
+with an error that looks like a Chap bug:
 
-- **`node:sqlite`, unflagged** — module-collections' entire store. It ships with
+- **`node:sqlite`, unflagged**: module-collections' entire store. It ships with
   Node, so there is no native module anywhere in the tree, no build toolchain to
   install, and nothing to rebuild per platform.
-- **`--env-file-if-exists`** — how the server and both proofs read `.env`.
+- **`--env-file-if-exists`**: how the server and the proofs read `.env`.
 
-Node 22.13 or newer has both. Nothing else here is platform-specific: no
+Node 22.13 or newer has both. Nothing else here is platform-specific. No
 dependency compiles, paths are built rather than concatenated, and the scripts
-that shell out reach npm through its own CLI under the running node rather than
-a `npm.cmd` shim, so Windows needs no special casing. `npm run gen:types` falls
+that shell out reach npm through its own CLI under the running Node rather than
+an `npm.cmd` shim, so Windows needs no special handling. `npm run gen:types` falls
 back to the committed `vendor/openapi.json`, so a checkout with no LewLM beside
-it still generates.
+it still generates. [docs/cross-platform.md](docs/cross-platform.md) records what
+running away from the Mac actually found.
 
-One caveat is the browser's, not Chap's. Push-to-talk dictation and
-copy-to-clipboard require a **secure context**, which `localhost` is and a LAN
-address is not. Reaching the dev server from a second machine over
-`http://192.168.x.x:5173` removes both APIs outright — the microphone button
-disables itself naming the secure context rather than blaming the transcription
-model, and the copy button reports `blocked`. Drive those two surfaces from the
-machine serving them, or put a certificate in front.
+One caveat comes from the browser, not Chap. Push-to-talk dictation and
+copy-to-clipboard require a **secure context**. `localhost` is one and a LAN
+address is not. Opening the dev server from a second machine over
+`http://192.168.x.x:5173` removes both APIs: the microphone button disables
+itself and names the secure context as the reason, rather than blaming the
+transcription model, and the copy button reports `blocked`. Use those two
+features from the machine serving them, or put a certificate in front.
 
 ## Verifying
 
 ```bash
 npm run proof                  # exercises the transport layer against live LewLM
-npm run proof:dk               # the same, for DocKtizo — needs its API and worker
-npm run gen:gaps               # runs every proof; writes what Settings → Gaps shows
+npm run gen:gaps               # runs the proofs; writes what Settings → Gaps shows
 npm run gen:gaps -- --check    # fails if that screen has drifted from the proofs
 npm run gen:types -- --check   # fails if LewLM's contract has drifted
 npm run loc:budget             # fails if any package's hand-written code grew
 npm run module:check           # fails if core learned a module's name
 npm run skin:check             # fails if a skin leaked out of the shell
 npm run typecheck
+npm test
 npm run doctor                 # can this machine run Chap at all
 ```
 
-LewLM's own Chap checklist — thirteen UI behaviours, four of which need an
-engine to go down — runs in a browser against a fixture whose engine can be
+`npm run proof` is deliberately browser-free. It proves the transport layer
+independently of React, so a UI bug can never pass for an integration bug. It
+also checks that every model reporting `chat_ready` can actually load, instead of
+trusting the registry annotation alone.
+
+LewLM's own Chap checklist has thirteen UI behaviours, four of which need an
+engine to go down. It runs in a browser against a fixture whose engine can be
 stopped, killed and restarted from outside:
 
 ```bash
@@ -296,23 +133,87 @@ npm run ui:checklist                                                            
 LEWLM_BASE_URL=http://127.0.0.1:8081 LEWLM_FIXTURE_CONTROL=http://127.0.0.1:8099 npm run proof
 ```
 
-With the harness, the proof also runs the engine-down gap probes (G37, G38,
-G40). The last recorded run is [docs/chap-validation.md](docs/chap-validation.md).
+With that harness running, the proof also runs the engine-down gap probes (G37,
+G38, G40). The last recorded run is
+[docs/chap-validation.md](docs/chap-validation.md).
 
-Both proofs read `.env`, so a correctly configured checkout proves against the
-same services the running app talks to. Without that, `npm run proof:dk` could
-not see the `DOCKTIZO_TOKEN` sitting beside it and reported five gaps DocKtizo
-had already closed.
+## Where LewLM falls short
 
-`npm run proof` is deliberately browser-free: it proves the transport layer
-independently of React, so a UI bug can never masquerade as an integration bug.
-It verifies that every model reporting `chat_ready` can actually load, rather
-than trusting the registry annotation on its own.
+The integration line count goes *down* when LewLM gains a capability. Wiring
+`tool_calls` into LewLM removed about 150 lines Chap would otherwise have
+written. Normalizing its OpenAPI removed 60 from the type generator. Byte uploads
+on `documents.ingest` removed a whole file-staging subsystem before it was ever
+built.
 
-`npm run gen:gaps` is the same idea aimed at the UI. The Settings → Gaps screen
-is generated from a real run of every proof rather than kept in step by hand,
-because that screen is where a visitor judges whether the project's central claim
-is honest and a hand-kept copy of a fact is exactly what drifts.
+When the count goes up, it is usually because LewLM is missing something. Those
+cases are tracked in [docs/lewlm-gaps.md](docs/lewlm-gaps.md). Each entry states
+what Chap needs, what the workaround costs, and the shape of a fix, and each has
+a probe in `npm run proof` that flips from `gap` to `FIXD` when LewLM gains the
+capability. That flip tells us which workaround to delete.
+
+The Settings → Gaps screen is generated from a live proof run by
+`npm run gen:gaps` rather than kept in step by hand, because that screen is where
+a reader judges whether this project's central claim is honest, and a hand-kept
+copy of a fact is exactly what drifts.
+
+## Spoken replies
+
+The `speak` toggle in the composer reads a reply aloud while it is still being
+generated. The reply is split into sentences as tokens arrive, and each sentence
+is synthesized as soon as it ends, so the first words play about one sentence
+after the model starts instead of a whole turn later. Playback is scheduled on the
+Web Audio clock so the clips join with no gap.
+
+None of it needed a LewLM change: one `POST /v1/audio/speech` per sentence and
+the existing typed client. All of it is in `web/`, because segmentation, jitter
+and playback are browser concerns rather than contract concerns, which is also
+why the integration budget above did not move. LewLM names its synthesis model
+itself (G25) and lists the voices it can use (G27), so the drawer has one control
+and a readout.
+
+## Two skins, one component tree
+
+Chap runs in two visual styles, switchable with `Cmd+\` (`Ctrl+\` on non-Apple
+hardware, which is also how the control labels itself there):
+
+- **Bench**: a dense, dark instrument panel with a live telemetry rail. The
+  working environment.
+- **Showroom**: spacious translucent glass. The display environment.
+
+They are not two apps. One component tree reads one token layer, and the skin
+swaps the token values. See [docs/skins.md](docs/skins.md).
+
+## Modules and companions
+
+LewLM is core, and it is the one part you cannot remove. Everything else attaches
+as a module, and `npm run module:check` fails the build if a core file learns a
+module's name. There are two kinds:
+
+- **Built-in modules** are Chap features built on LewLM alone, and they are always
+  on. `module-collections` is a retrieval store: chunks in `node:sqlite`, with
+  embeddings and reranking from LewLM.
+- **Companions** are adapters for *other products that run on LewLM*, so Chap can
+  be used to test them too. They are **off unless `CHAP_COMPANIONS` names them**,
+  and nothing in Chap needs them. `module-docktizo` is the one example today. It
+  fronts [DocKtizo](packages/module-docktizo/README.md), an experimental
+  document-generation service built on LewLM by the same author. If you have not
+  heard of DocKtizo, you can ignore that directory.
+
+```
+                       integration     ui      budgets      kind
+    lewlm                      711      —      900 / none   core
+    module-collections         268     210     300 / 260    built-in
+    module-docktizo            288    1221     340 / 1400   companion (off)
+```
+
+**Two budgets, because they answer different questions.** `integration` is what
+it costs to *talk* to an upstream: the client, the store, the server half, the
+types. `ui` is what it costs to *show* it. A file that renders is `.tsx` and a
+file that talks is `.ts`, so the split needs no directory rules and JSX cannot
+hide on the wrong side of it.
+
+To test your own LewLM-based product through Chap, add a companion. The recipe,
+and the rules that keep core blind to it, are in [docs/modules.md](docs/modules.md).
 
 ## Layout
 
@@ -321,13 +222,15 @@ packages/lewlm/       @chap/lewlm — the entire LewLM surface. Zero runtime
                       dependencies, no React, isomorphic. Core, not a module.
   src/generated/      from LewLM's contract. Checked in: the diff IS the record
                       of contract drift.
-packages/module-*/    Everything that is not LewLM. Two exports each — ./server
-                      and ./web — and its own line budget.
-server/               Hono. Proxies /v1 to LewLM, mounts whatever MODULES holds.
-                      A byte pipe — it must never transform a payload.
-web/                  Vite + React + Tailwind v4. The showroom.
-docs/                 modules.md, lewlm-gaps.md, docktizo-gaps.md, skins.md,
-                      chap-validation.md, cross-platform.md
+packages/module-*/    Everything that is not LewLM. Two exports each (./server
+                      and ./web) and its own line budget. Companions carry a
+                      README saying what they front.
+server/               Hono. Proxies /v1 to LewLM and mounts whatever modules are
+                      on. A byte pipe: it must never transform a payload.
+web/                  Vite + React + Tailwind v4.
+vendor/               contracts Chap generates from, so a checkout builds offline.
+docs/                 modules.md, lewlm-gaps.md, skins.md, chap-validation.md,
+                      cross-platform.md
 scripts/              doctor, gen-types, gen-gaps, proof, probe, loc-budget,
                       module-check, skin-check, dev, npm (how to invoke npm on
                       every platform, in one place), ui-smoke, ui-checklist,

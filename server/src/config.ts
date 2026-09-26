@@ -15,6 +15,8 @@ export interface ChapConfig {
   serveStatic: boolean;
   /** Where modules keep state. Chap creates it; each module owns a path inside. */
   dataDir: string;
+  /** Companion ids to turn on, from `CHAP_COMPANIONS`. Empty is the normal case. */
+  companions: string[];
 }
 
 function trimTrailingSlash(value: string): string {
@@ -32,5 +34,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ChapConfig {
     lewlmApiKey: env['LEWLM_API_KEY'] || undefined,
     serveStatic: env['NODE_ENV'] === 'production',
     dataDir: env['CHAP_DATA_DIR'] || '.chap',
+    companions: (env['CHAP_COMPANIONS'] ?? '').split(/[\s,]+/).filter(Boolean),
   };
 }

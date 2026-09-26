@@ -1,7 +1,12 @@
 #!/usr/bin/env -S npx tsx
 /**
  * Headless proof of the DocKtizo module's transport, and the regression suite
- * for docs/docktizo-gaps.md.
+ * for GAPS.md beside it. Run with `npm run proof:docktizo`.
+ *
+ * DocKtizo is a separate, experimental document-generation service built on
+ * LewLM (github.com/lew-cx/DocKtizo). This package is an optional Chap
+ * *companion*: off unless `CHAP_COMPANIONS=docktizo`, and nothing in Chap needs
+ * it. See this package's README.md.
  *
  * Same contract as scripts/proof.ts: a `check` asserts something that should
  * work, a `gap` asserts something that is currently broken upstream. When a gap

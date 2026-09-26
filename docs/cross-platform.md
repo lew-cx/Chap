@@ -88,12 +88,13 @@ every other. Contract documents are now read through `asContract()` in
 `scripts/gen-types.mjs`, which normalizes line endings where a document enters,
 so a regeneration on Windows leaves a clean tree.
 
-The root cause is one line in LewLM, and Chap cannot fix it there. DocKtizo
-already pins `* text=auto eol=lf`, which is why its target never failed. **LewLM
-should do the same** — until it does, Chap is only defending itself.
+The root cause is one line in LewLM, and Chap cannot fix it there. DocKtizo (the
+optional companion in `packages/module-docktizo`) already pins
+`* text=auto eol=lf`, which is why its target never failed. **LewLM should do the
+same** — until it does, Chap is only defending itself.
 
 **A gaps screen generated from services that were not running.**
-`gen:gaps` runs every proof and writes what they report. With DocKtizo down, its
+`gen:gaps` ran every proof and wrote what they reported. With DocKtizo down, its
 proof still emits a full result set — five FAILs noted `fetch failed`, then five
 GAPs noted `not verifiable without a working token` — and those were written out
 as five open gaps *against DocKtizo*, with a suite line of `0 passed · 5 failed`.
@@ -108,8 +109,10 @@ the run never got far enough for a GAP line to mean absence-of-capability rather
 than absence-of-service. It reports which upstream was unreachable and leaves
 the module alone.
 
-Run `npm run gen:gaps` only with every upstream up. It is the one command here
-whose output is a claim about somebody else.
+Run `npm run gen:gaps` only with every upstream it proves up. It is the one
+command here whose output is a claim about somebody else. Since then, companions
+are off by default, so the default run proves LewLM alone. A companion's proof
+joins only when `CHAP_COMPANIONS` names it.
 
 ## The lanes, 2026-09-25
 

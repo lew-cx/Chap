@@ -19,9 +19,10 @@
 packages/lewlm/src/generated/** linguist-generated=true
 vendor/openapi.json linguist-generated=true
 
-# The same, for DocKtizo's contract and for the gap module `npm run gen:gaps`
-# writes from a live proof run. Checked in for the same reason, and because the
-# Settings screen imports the gap module — a checkout without it does not build.
+# The same, for the optional DocKtizo companion's contract, and for the gap
+# module `npm run gen:gaps` writes from a live proof run. Checked in for the same
+# reason, and because the build imports both — a checkout without them does not
+# build, and nobody should need DocKtizo checked out to get them.
 packages/module-docktizo/src/generated/** linguist-generated=true
 vendor/docktizo-contract.json linguist-generated=true
 vendor/docktizo-openapi.json linguist-generated=true

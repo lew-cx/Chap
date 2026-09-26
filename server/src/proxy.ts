@@ -45,7 +45,7 @@ const HOP_BY_HOP = new Set([
 /** One upstream, and what the pipe is allowed to add on the way there. */
 export interface PipeTarget {
   baseUrl: string;
-  /** Removed from the path before forwarding: `/dk/healthz` reaches DocKtizo as `/healthz`. */
+  /** Removed from the path before forwarding: `/mod/healthz` reaches the upstream as `/healthz`. */
   stripPrefix?: string;
   /**
    * Credentials and audit identity the browser must not hold. Supplied by the

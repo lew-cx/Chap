@@ -746,8 +746,8 @@ async function main() {
   await gap('G13', '/v1/events can be resumed after a drop', async () => {
     // Filtering landed; replay did not. A frame carries no `id:`, so there is no
     // cursor to send back — `Last-Event-ID` has nothing to name even if the
-    // route read it. DocKtizo's generation stream puts its paged cursor on every
-    // frame, which is the shape this wants.
+    // route read it. The DocKtizo companion's generation stream puts its paged
+    // cursor on every frame, which is the shape this wants.
     if (eventFrameIds > 0) return null;
     // No frames at all is not evidence about cursors — it is the events check
     // above failing, and saying "gap" would reopen a closed entry on no data.

@@ -18,12 +18,13 @@ import { Stat } from '../components/Field.tsx';
 import { StatusDot } from '../components/Nav.tsx';
 import { Screen, Section } from '../components/Screen.tsx';
 import { Table } from '../components/Table.tsx';
-import { useModuleList } from '../lib/useModules.ts';
+import { useDormantCompanions, useModuleList } from '../lib/useModules.ts';
 import { usePolled } from '../lib/usePolled.ts';
-import { moduleTabs } from '../modules.ts';
+import { useModuleTabs } from '../modules.ts';
 import { SkinPanel } from '../shell/SkinPanel.tsx';
 
 export function SettingsScreen() {
+  const moduleTabs = useModuleTabs('settings');
   return (
     <Screen
       tabs={[
@@ -31,7 +32,7 @@ export function SettingsScreen() {
         { id: 'contract', component: Contract },
         { id: 'modules', component: Modules },
         { id: 'gaps', component: Gaps },
-        ...moduleTabs('settings'),
+        ...moduleTabs,
       ]}
     />
   );
@@ -96,29 +97,42 @@ function Contract() {
  */
 function Modules() {
   const modules = useModuleList();
+  const dormant = useDormantCompanions();
 
   return (
-    <Section title="installed modules" hint={`${modules.length} · LewLM is core, not a module`}>
-      <Table
-        columns={[
-          { key: 'id', label: 'module', render: (row) => row.label },
-          { key: 'prefix', label: 'mounted at', render: (row) => row.prefix },
-          {
-            key: 'ready',
-            label: 'status',
-            render: (row) =>
-              row.ready ? (
-                <StatusDot tone="ok">ready</StatusDot>
-              ) : (
-                <StatusDot tone="warn">{row.reason ?? 'not ready'}</StatusDot>
-              ),
-          },
-          { key: 'env', label: 'reads', render: (row) => row.env.join(' · ') || '—' },
-        ]}
-        rows={modules}
-        empty="none installed — Chap is a LewLM client and nothing else"
-      />
-    </Section>
+    <>
+      <Section title="installed modules" hint={`${modules.length} · LewLM is core, not a module`}>
+        <Table
+          columns={[
+            { key: 'id', label: 'module', render: (row) => row.label },
+            { key: 'prefix', label: 'mounted at', render: (row) => row.prefix },
+            {
+              key: 'ready',
+              label: 'status',
+              render: (row) =>
+                row.ready ? (
+                  <StatusDot tone="ok">ready</StatusDot>
+                ) : (
+                  <StatusDot tone="warn">{row.reason ?? 'not ready'}</StatusDot>
+                ),
+            },
+            { key: 'env', label: 'reads', render: (row) => row.env.join(' · ') || '—' },
+          ]}
+          rows={modules}
+          empty="none installed — Chap is a LewLM client and nothing else"
+        />
+      </Section>
+      {dormant.length > 0 && (
+        <Section title="companions available" hint="off · other products built on LewLM">
+          <p className="text-sm">
+            Adapters for testing other LewLM-based products through Chap. Chap does not need
+            them. To turn one on, set{' '}
+            <span className="numeric">CHAP_COMPANIONS={dormant.join(',')}</span> in{' '}
+            <span className="numeric">.env</span> and restart the server.
+          </p>
+        </Section>
+      )}
+    </>
   );
 }
 

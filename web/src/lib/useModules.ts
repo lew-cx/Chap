@@ -21,9 +21,22 @@ export interface ModuleStatus {
   reason: string | null;
 }
 
+interface ChapHealth {
+  modules: ModuleStatus[];
+  /** Every registered companion, switched on or not. */
+  companions_available?: string[];
+}
+
 export function useModuleList(): ModuleStatus[] {
-  const { data } = usePolled<{ modules: ModuleStatus[] }>('/_chap/health', 15_000);
+  const { data } = usePolled<ChapHealth>('/_chap/health', 15_000);
   return data?.modules ?? [];
+}
+
+/** Companions this build could run but the server has not been told to. */
+export function useDormantCompanions(): string[] {
+  const { data } = usePolled<ChapHealth>('/_chap/health', 15_000);
+  const running = new Set((data?.modules ?? []).map((module) => module.id));
+  return (data?.companions_available ?? []).filter((id) => !running.has(id));
 }
 
 /** `null` until the first health response lands — not the same as "not ready". */

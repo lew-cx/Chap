@@ -33,19 +33,11 @@ export interface ProofSuite {
 export const PROOF_SUITES: readonly ProofSuite[] = [
   {
     "script": "proof",
-    "ranAt": "2026-09-22T17:01:13.773Z",
+    "ranAt": "2026-09-26T18:22:09.636Z",
     "passed": 21,
     "failed": 0,
-    "gaps": 2,
+    "gaps": 6,
     "fixed": 20
-  },
-  {
-    "script": "proof:dk",
-    "ranAt": "2026-08-25T01:19:18.661Z",
-    "passed": 6,
-    "failed": 0,
-    "gaps": 0,
-    "fixed": 8
   }
 ] as const;
 
@@ -173,8 +165,8 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "id": "G22",
     "suite": "proof",
     "title": "prompt teaches the tool-call format",
-    "note": "fixed upstream — Chap can drop its workaround",
-    "open": false
+    "note": "no system_prompt injection -> no_tool_calls",
+    "open": true
   },
   {
     "id": "G5",
@@ -194,8 +186,8 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "id": "G30",
     "suite": "proof",
     "title": "a caller-supplied maxLength is answered, not fatal",
-    "note": "no model on this host enforces json_schema at decode time; not probeable here",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G31",
@@ -205,59 +197,52 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "open": false
   },
   {
-    "id": "D1",
-    "suite": "proof:dk",
-    "title": "health reports liveness only, never downstream readiness",
-    "note": "fixed upstream — Chap can drop its workaround",
+    "id": "G34",
+    "suite": "proof",
+    "title": "a streamed native tool call is parsed by LewLM",
+    "note": "no native tool-call deltas on this runtime (finish stop); not exercised",
+    "open": true
+  },
+  {
+    "id": "G35",
+    "suite": "proof",
+    "title": "tool calling is advertised per model",
+    "note": "capabilities are [chat, streaming]; nothing says whether tools are native, prompt-taught or unsupported",
+    "open": true
+  },
+  {
+    "id": "G36",
+    "suite": "proof",
+    "title": "a tool result can name the call it answers",
+    "note": "ChatMessage publishes [role, content]; no tool_call_id, and an assistant turn has no tool_calls",
+    "open": true
+  },
+  {
+    "id": "G39",
+    "suite": "proof",
+    "title": "a browser can resume events with Last-Event-ID",
+    "note": "CORS off on this server; not observable (see G1)",
+    "open": true
+  },
+  {
+    "id": "G40",
+    "suite": "proof",
+    "title": "a stream to a down engine is refused before it opens",
+    "note": "needs --control (scripts/lewlm-fixture.py)",
     "open": false
   },
   {
-    "id": "D2",
-    "suite": "proof:dk",
-    "title": "no committed spec and no published client",
-    "note": "fixed upstream — Chap can drop its workaround",
+    "id": "G37",
+    "suite": "proof",
+    "title": "engine state follows a refused connection",
+    "note": "needs --control (scripts/lewlm-fixture.py)",
     "open": false
   },
   {
-    "id": "D3",
-    "suite": "proof:dk",
-    "title": "generation events are polled, never streamed",
-    "note": "fixed upstream — Chap can drop its workaround",
-    "open": false
-  },
-  {
-    "id": "D4",
-    "suite": "proof:dk",
-    "title": "no response says which workspace the token resolved to",
-    "note": "fixed upstream — Chap can drop its workaround",
-    "open": false
-  },
-  {
-    "id": "D5",
-    "suite": "proof:dk",
-    "title": "request size limits are keyed to content-length",
-    "note": "fixed upstream — Chap can drop its workaround",
-    "open": false
-  },
-  {
-    "id": "D6",
-    "suite": "proof:dk",
-    "title": "a workflow the host cannot run is accepted anyway",
-    "note": "fixed upstream — Chap can drop its workaround",
-    "open": false
-  },
-  {
-    "id": "D7",
-    "suite": "proof:dk",
-    "title": "the registered migration pairs are not published",
-    "note": "fixed upstream — Chap can drop its workaround",
-    "open": false
-  },
-  {
-    "id": "D8",
-    "suite": "proof:dk",
-    "title": "a workspace's documents cannot be listed",
-    "note": "fixed upstream — Chap can drop its workaround",
+    "id": "G38",
+    "suite": "proof",
+    "title": "availability names the fallback that would serve",
+    "note": "needs --control (scripts/lewlm-fixture.py)",
     "open": false
   }
 ] as const;
