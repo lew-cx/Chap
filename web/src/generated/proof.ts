@@ -33,11 +33,11 @@ export interface ProofSuite {
 export const PROOF_SUITES: readonly ProofSuite[] = [
   {
     "script": "proof",
-    "ranAt": "2026-09-26T18:22:09.636Z",
+    "ranAt": "2026-09-26T18:35:41.680Z",
     "passed": 21,
     "failed": 0,
-    "gaps": 6,
-    "fixed": 20
+    "gaps": 1,
+    "fixed": 28
   }
 ] as const;
 
@@ -60,8 +60,8 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "id": "G1",
     "suite": "proof",
     "title": "CORS is available",
-    "note": "CORS off on this server — start with LEWLM_CORS_ENABLED=true to serve a browser directly",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G6",
@@ -165,8 +165,8 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "id": "G22",
     "suite": "proof",
     "title": "prompt teaches the tool-call format",
-    "note": "no system_prompt injection -> no_tool_calls",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G5",
@@ -186,8 +186,8 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "id": "G30",
     "suite": "proof",
     "title": "a caller-supplied maxLength is answered, not fatal",
-    "note": "fixed upstream — Chap can drop its workaround",
-    "open": false
+    "note": "no model on this host enforces json_schema at decode time; not probeable here",
+    "open": true
   },
   {
     "id": "G31",
@@ -200,49 +200,49 @@ export const PROOF_GAPS: readonly ProofGap[] = [
     "id": "G34",
     "suite": "proof",
     "title": "a streamed native tool call is parsed by LewLM",
-    "note": "no native tool-call deltas on this runtime (finish stop); not exercised",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G35",
     "suite": "proof",
     "title": "tool calling is advertised per model",
-    "note": "capabilities are [chat, streaming]; nothing says whether tools are native, prompt-taught or unsupported",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G36",
     "suite": "proof",
     "title": "a tool result can name the call it answers",
-    "note": "ChatMessage publishes [role, content]; no tool_call_id, and an assistant turn has no tool_calls",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G39",
     "suite": "proof",
     "title": "a browser can resume events with Last-Event-ID",
-    "note": "CORS off on this server; not observable (see G1)",
-    "open": true
+    "note": "fixed upstream — Chap can drop its workaround",
+    "open": false
   },
   {
     "id": "G40",
     "suite": "proof",
     "title": "a stream to a down engine is refused before it opens",
-    "note": "needs --control (scripts/lewlm-fixture.py)",
+    "note": "fixed upstream — Chap can drop its workaround",
     "open": false
   },
   {
     "id": "G37",
     "suite": "proof",
     "title": "engine state follows a refused connection",
-    "note": "needs --control (scripts/lewlm-fixture.py)",
+    "note": "fixed upstream — Chap can drop its workaround",
     "open": false
   },
   {
     "id": "G38",
     "suite": "proof",
     "title": "availability names the fallback that would serve",
-    "note": "needs --control (scripts/lewlm-fixture.py)",
+    "note": "fixed upstream — Chap can drop its workaround",
     "open": false
   }
 ] as const;

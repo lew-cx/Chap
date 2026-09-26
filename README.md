@@ -63,9 +63,12 @@ docker compose --profile gpu up -d lewlm-cuda
 
 # 2. Chap
 npm install
-npm run gen:types      # reads LewLM's contract; no running server needed
 npm run dev            # http://localhost:5173
 ```
+
+The types generated from LewLM's contract are committed, so Chap builds and runs
+without a LewLM checkout beside it. `npm run gen:types` refreshes them after
+LewLM changes; it reads `../LewLM` (or `$LEWLM_HOME`) and needs no running server.
 
 Copy `.env.example` to `.env` to point at a different LewLM or supply an API key.
 The key stays in the server process, and the browser never receives it.
@@ -89,9 +92,8 @@ with an error that looks like a Chap bug:
 Node 22.13 or newer has both. Nothing else here is platform-specific. No
 dependency compiles, paths are built rather than concatenated, and the scripts
 that shell out reach npm through its own CLI under the running Node rather than
-an `npm.cmd` shim, so Windows needs no special handling. `npm run gen:types` falls
-back to the committed `vendor/openapi.json`, so a checkout with no LewLM beside
-it still generates. [docs/cross-platform.md](docs/cross-platform.md) records what
+an `npm.cmd` shim, so Windows needs no special handling.
+[docs/cross-platform.md](docs/cross-platform.md) records what
 running away from the Mac actually found.
 
 One caveat comes from the browser, not Chap. Push-to-talk dictation and
@@ -108,7 +110,7 @@ features from the machine serving them, or put a certificate in front.
 npm run proof                  # exercises the transport layer against live LewLM
 npm run gen:gaps               # runs the proofs; writes what Settings → Gaps shows
 npm run gen:gaps -- --check    # fails if that screen has drifted from the proofs
-npm run gen:types -- --check   # fails if LewLM's contract has drifted
+npm run gen:types -- --check   # fails if LewLM's contract has drifted (needs ../LewLM)
 npm run loc:budget             # fails if any package's hand-written code grew
 npm run module:check           # fails if core learned a module's name
 npm run skin:check             # fails if a skin leaked out of the shell

@@ -332,6 +332,16 @@ async function buildEnums(bundle) {
 
 async function generate() {
   const bundlePath = join(LEWLM_HOME, 'examples/integration-bundle.json');
+  // The bundle and fixtures are read from a LewLM checkout and are not vendored.
+  // Say so plainly: the generated output is committed, so a checkout without
+  // LewLM beside it builds fine and only needs this to refresh the contract.
+  if (!existsSync(bundlePath)) {
+    throw new Error(
+      `no LewLM checkout at ${LEWLM_HOME} (set LEWLM_HOME).\n` +
+        "  gen:types refreshes the committed types from LewLM's contract;" +
+        ' you do not need it to build or run Chap.',
+    );
+  }
   const bundleRaw = asContract(await readFile(bundlePath, 'utf8'));
   const bundle = JSON.parse(bundleRaw);
   if (bundle.bundle_format !== 'lewlm-integration-bundle-v1') {
