@@ -13,15 +13,38 @@ argument. Every entry has a probe in `npm run proof` that flips from `gap` to
 `FIXD` when LewLM gains the capability, which is how we learn a workaround can be
 deleted.
 
-Verified against LewLM `0.4.2` on 2026-09-22 using its shipped fake backend.
+Verified against LewLM `0.4.2` (branch `windows-linux-lanes` at `86713e1`, plus
+the uncommitted G40 follow-up in its working tree) on 2026-09-26, on Windows 11,
+using `scripts/lewlm-fixture.py` — LewLM's fake backend with two engines, a
+fallback alias and a control port — and against a native Windows LewLM serving
+Gemma 4 E2B on llama.cpp CPU:
 
 ```
-  21 passed · 0 failed · 2 gaps confirmed · 20 gaps fixed upstream
+  fixture          21 passed · 0 failed · 1 gaps confirmed · 28 gaps fixed upstream
+  native Windows   20 passed · 0 failed · 3 gaps confirmed · 23 gaps fixed upstream
 ```
 
-The Settings → Gaps screen is generated from this run by `npm run gen:gaps`, so
-it cannot claim a gap the proof does not confirm or miss one it does. It used to
-be a hand-kept array and had drifted from both this document and the proof.
+On the fixture, the one `gap` line is G30, which a bridge cannot exercise (see
+below). The native line predates the G40 follow-up and has no harness, so the
+three engine-down probes skip, and G1/G34/G39 read *not observable*: CORS was
+allowed only for Chap's production origin, and packaged llama.cpp streams no
+native tool deltas.
+
+G34–G40 were opened on 2026-09-25 by working through LewLM's own Chap UI
+checklist, and closed upstream the next day — G40 in two steps, the second for
+Windows. Chap deleted the
+workarounds the same day. What each cost and what replaced it is in the Closed
+table. The checklist record is [chap-validation.md](chap-validation.md).
+
+The Settings → Gaps screen is generated from the proofs by `npm run gen:gaps`,
+so it cannot claim a gap the proof does not confirm or miss one it does. It used
+to be a hand-kept array and had drifted from both this document and the proof.
+
+**It has not been regenerated since G33.** `gen:gaps` runs every proof,
+DocKtizo's included, and DocKtizo was not running on the Windows host; it
+refuses rather than publish a half-run, as it should. Run it with DocKtizo up,
+and with `LEWLM_BASE_URL`/`LEWLM_FIXTURE_CONTROL` pointing at the fixture
+harness, to bring the screen level with this document.
 
 **The score line is host-dependent, and the gap count is not.** On the earlier
 2026-08-24 run the same proof on Windows reported `20 passed · 1 failed`, because
@@ -31,13 +54,7 @@ identical. `npm run gen:gaps` is only meaningful with every upstream running; it
 refuses rather than writing gaps an incomplete host invented. See
 [cross-platform.md](cross-platform.md).
 
-The two remaining `gap` lines are environment/probe limitations, not missing
-LewLM contracts: G1 records that the fixture was intentionally started without
-CORS, and G30 cannot exercise llama.cpp decode-time grammar enforcement because
-the fixture is an OpenAI-compatible bridge. The real-runtime G30 proof remains
-recorded below.
-
-This update closed the three actual integration gaps that were open in Chap:
+The 2026-09-22 update had closed the three integration gaps open before it:
 
 - G13: event frames now carry cursors, reconnects replay through
   `Last-Event-ID`, and `events.resumed` reports exact or unknowable loss.
@@ -53,9 +70,9 @@ same proof run.
 
 ## Open
 
-No LewLM contract gap is currently confirmed. The proof's G1 and G30 lines are
-kept visible because they state what this particular fixture run did not
-establish.
+No LewLM contract gap is currently confirmed. The proof's G30 line stays
+visible on the fixture because a bridge cannot exercise decode-time grammar
+enforcement; against a packaged llama.cpp runtime it reads fixed.
 
 ---
 
@@ -99,6 +116,13 @@ and these are the costs that went away.
 | **G19** no serving-profile listing | the "recommendation from the run you just triggered" framing in Ops | `GET /v1/serving-profiles` with `model` / `capability` / `limit`. Listing only — pin and delete were left as a real design decision rather than guessed at. |
 | **G32** responses had no finish reason | the normalized `null` outcome | `finish_reason` on sync and streamed response terminal payloads, rendered beside every run |
 | **G33** speech formats unpublished | the four-value `FORMATS` constant | per-model `formats[]`, `formats_exhaustive`, and `default_format` on the voice inventory |
+| **G34** streamed native tool calls unparsed | `ToolDeltaAccumulator` in `stream.ts` (~50 lines of fragment reassembly and JSON parsing, which nothing validated), its unit test, and the inspector notice that owned up to it | the terminal chunk carries LewLM's parsed, schema-validated `tool_calls` on every stream. `stream.ts` passes the verdict through and reassembles nothing: 758 → 711 integration lines. |
+| **G35** tool calling unadvertised | nothing to delete — the missing piece was the gate itself | `tool_calling: { support: native \| prompt_guided \| none, parallel, reason }` on the capability report. The tools drawer shows the prediction, and a model predicted `none` is sent no tools. |
+| **G36** tool results could not name their call | `historyTurn`'s rewrite of an assistant turn into `{"tool_calls": [...]}` text, and pairing results to calls by order | `tool_calls` on assistant messages and `tool_call_id` on tool messages. A continuation sends the calls as calls, LewLM's `remaining_text` as the text, and each result names its `call_id`. |
+| **G37** engine state lagged a refusal | `web/src/store/engines.ts` — the tab's memory of refusals and the logic for forgetting them — plus the "failing · LewLM says advertised" readouts | a refusal marks the endpoint down at once, with the error; Chap re-reads health and the inventory immediately and shows LewLM's state as it is. |
+| **G38** a fallback-served model said it could not chat | the rule that hid such a model from the picker | `fallback_model_id` on availability and a reason naming the down engine. The picker offers the model as "engine stale, answered by fallback". |
+| **G39** `Last-Event-ID` failed the preflight | nothing — `?after=` stays, because a query needs no preflight at all | `last-event-id` in the default CORS allow-list; a direct browser resume with the header passes. |
+| **G40** a stream to a down engine opened before it failed | nothing — Chap handled both shapes; the "nothing delivered" label stays for an engine that accepts a request and fails before its first token | headers are held until the engine has *accepted* the request (`RuntimeStreamEvent(opened=True)`, sent by the bridge when the engine's response headers arrive), its first item, or its failure, bounded at 30 s. The first fix held them for a fixed second, which raced the connect on Windows: a refused loopback connect there takes ~2 s, so the first streamed request to a stopped engine still got `200` and an in-band error. Now both surfaces answer `503` after 2.05 s, and a healthy stream's first byte is unchanged (20 ms). Runtimes with no connection phase keep the one-second window. |
 | Kokoro-shaped bundles undiscoverable | copying `kokoro-v1_0.safetensors` to `weights.safetensors` in the models directory | published-bundle discovery: `config.json` + model-named weights + no tokenizer or processor is MLX/runnable. The bundle is used as published. |
 | KV-cache default | `LEWLM_KV_CACHE_QUANTIZATION_BITS=16` from the run instructions | default off; quantized KV pairs with `flash_attn` or is refused |
 | `int \| None` via env | — | `""` / `null` / `none` / `~` unset any optional setting |

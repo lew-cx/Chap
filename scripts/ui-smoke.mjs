@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 /** Focused browser acceptance against a running Chap dev server and LewLM fixture. */
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { chromium } from 'playwright';
 
 const browser = await chromium.launch({ headless: true });
@@ -26,8 +29,8 @@ await page.locator('textarea.code').fill(JSON.stringify([
   },
 ], null, 2));
 await page.locator('textarea[placeholder^="Ask anything"]').fill('What is the weather in Lisbon?');
-await page.getByRole('button', { name: 'Send' }).click();
-await page.getByRole('button', { name: 'Send' }).waitFor({ timeout: 15_000 });
+await page.getByRole('button', { name: 'Send', exact: true }).click();
+await page.getByRole('button', { name: 'Send', exact: true }).waitFor({ timeout: 15_000 });
 await page.getByText('tool calls', { exact: true }).waitFor();
 await page.getByText('tool_calls', { exact: true }).waitFor();
 
@@ -43,7 +46,9 @@ for (const route of [
   if ((await page.getByText('This panel crashed').count()) > 0) failures.push(`${route}: error boundary`);
 }
 
-await page.screenshot({ path: '/tmp/chap-ui-smoke.png', fullPage: true });
+// `/tmp` resolves to a folder at the drive root on Windows, which usually does not exist.
+const screenshot = join(tmpdir(), 'chap-ui-smoke.png');
+await page.screenshot({ path: screenshot, fullPage: true });
 await browser.close();
 if (failures.length) throw new Error(failures.join('\n'));
-console.log('Chap UI smoke passed: model picker, tool call, and updated routes rendered without browser errors.');
+console.log(`Chap UI smoke passed: model picker, tool call, and updated routes rendered without browser errors. (${screenshot})`);

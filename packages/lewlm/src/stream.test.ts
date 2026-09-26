@@ -57,22 +57,29 @@ test('streaming forwards the caller correlation id', async () => {
   assert.deepEqual(events, ['done']);
 });
 
-test('native tool-call deltas are reassembled for the final event', async () => {
-  const frames = [
+test("a streamed tool call is LewLM's verdict, not Chap's parse of the deltas", async () => {
+  // Since G34 the terminal chunk carries LewLM's parsed, schema-validated
+  // result even when the engine streamed native fragments. Chap passes it
+  // through and reassembles nothing: fragments with no verdict yield none.
+  const verdict = {
+    status: 'parsed',
+    parser: 'lewlm_strict_tool_parser',
+    tool_calls: [{ call_id: 'call-1', name: 'weather', arguments: { city: 'Lisbon' } }],
+    issues: [],
+    parallel: false,
+  };
+  const fragments = [
     { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call-1', function: { name: 'weather', arguments: '{"city":' } }] }, finish_reason: null }] },
     { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"Lisbon"}' } }] }, finish_reason: null }] },
-    { choices: [{ delta: {}, finish_reason: 'tool_calls' }], tool_calls: null },
   ];
-  const body = frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join('') + 'data: [DONE]\n\n';
-  const client = streamClient(body);
-  let final;
-  for await (const event of streamChat(client, request)) if (event.type === 'final') final = event;
-  assert.equal(final?.toolCalls?.status, 'parsed');
-  assert.deepEqual(final?.toolCalls?.tool_calls?.[0], {
-    call_id: 'call-1',
-    name: 'weather',
-    arguments: { city: 'Lisbon' },
-  });
+  const run = async (terminal: unknown) => {
+    const body = [...fragments, terminal].map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join('') + 'data: [DONE]\n\n';
+    let final;
+    for await (const event of streamChat(streamClient(body), request)) if (event.type === 'final') final = event;
+    return final?.toolCalls;
+  };
+  assert.deepEqual(await run({ choices: [{ delta: {}, finish_reason: 'tool_calls' }], tool_calls: verdict }), verdict);
+  assert.equal(await run({ choices: [{ delta: {}, finish_reason: 'tool_calls' }], tool_calls: null }), null);
 });
 
 test('responses expose finish reasons and terminal in-band errors', async () => {

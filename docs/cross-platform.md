@@ -111,6 +111,66 @@ the module alone.
 Run `npm run gen:gaps` only with every upstream up. It is the one command here
 whose output is a claim about somebody else.
 
+## The lanes, 2026-09-25
+
+LewLM's `windows-linux-lanes` branch ran every engine lane on this host — native
+Windows llama.cpp and Ollama, vLLM, SGLang and TabbyAPI under WSL2, CPU and CUDA
+containers — and left Chap's UI checklist pending. That checklist is now
+recorded in [chap-validation.md](chap-validation.md), against a fixture and
+against the `lewlm:cuda` container. Five things came up that are about running
+Chap on Windows rather than about LewLM's contract.
+
+**Two servers can answer on one port.** The `lewlm:cuda` container publishes
+`0.0.0.0:8080` and `[::]:8080` through Docker Desktop and `wslrelay`. A LewLM
+started natively on `127.0.0.1:8080` binds as well, because Windows lets a
+specific address share a port with the wildcard. From then on
+`http://127.0.0.1:8080` reaches one server and `http://localhost:8080` —
+`::1` first — reaches the other, with no error anywhere. Check `/v1/health`'s
+`hostname` when a result looks like it came from the wrong place: a container
+answers with its container id. Running a second LewLM on another port and
+setting `LEWLM_BASE_URL` avoids the question.
+
+**`npm run proof` ignored `.env`.** It is started with
+`--env-file-if-exists=.env` so it proves "the same services the running app
+talks to", and then read neither `LEWLM_BASE_URL` nor `LEWLM_API_KEY`: it
+always proved `127.0.0.1:8080`, keyless. With the container above, that is a
+different LewLM from the one Chap was pointed at. It reads both now, plus
+`LEWLM_FIXTURE_CONTROL` for the harness, since `gen:gaps` passes no flags.
+
+**`npm run dev` could leave a server behind.** `dev.mjs` stopped its tasks with
+`child.kill()`, which on Windows ends npm and not the tsx or Vite process npm
+started. A killed dev session left chap-server holding 8787. The next one's
+server died with `EADDRINUSE` inside `tsx watch` — which keeps running, so
+`dev.mjs` never saw it exit — while Vite, finding 5173 taken, moved to 5174 and
+proxied to the stale server. It looked like a working app pointed at the wrong
+LewLM. Now tasks are stopped with `taskkill /T /F` on Windows, and Vite has
+`strictPort`, so a second dev server fails instead of drifting. `dev.mjs` run
+directly (`node scripts/dev.mjs`) also works now: npm's CLI is found beside
+`node.exe` rather than spawning `npm.cmd`, which fails with `EINVAL`.
+
+**Vite's dev proxy held a dropped stream open.** With LewLM restarted under an
+open `/v1/events`, chap-server truncated the response as it should, and Vite
+kept the browser's side open. The explorer sat at "open" and never resumed.
+Not Windows-specific, but found here. Production has no Vite hop and was never
+affected. `web/vite.config.ts` now destroys the browser's response when the
+upstream one closes incomplete.
+
+**A refused connection is slow on Windows.** A fresh TCP connect to a closed
+loopback port is refused after about two seconds (2.05–2.19 s measured here),
+because Windows retries the SYN before reporting `WinError 10061`; on Linux and
+macOS it fails in milliseconds. LewLM's first fix for G40 waited one second for
+a stream's first item before committing headers, which covered the fast
+platforms and not this one: the first streamed request to a freshly stopped
+engine still got `200` and an in-band failure. The follow-up waits for the
+engine to accept the connection instead of a fixed second, and the same request
+is now a `503` after 2.05 s ([lewlm-gaps.md](lewlm-gaps.md), G40). Anything else
+that times an engine's failure should still expect two seconds here, not zero.
+
+**Chromium's offline emulation does not drop localhost.**
+`context.setOffline(true)` leaves an established stream to `localhost` open, so
+it cannot simulate a reconnect. The checklist restarts LewLM through the
+fixture harness instead, which is a real drop, and a real `lost: null`.
+
 ## Notes
 
 - `.env.example`, `.gitattributes` and `.gitignore` check out CRLF, because
@@ -120,4 +180,5 @@ whose output is a claim about somebody else.
 - `server/.chap/vectors.sqlite` is tracked despite `.chap/` being ignored — it
   was committed once in `Solid foundation` and never updated. Ignoring a path
   does not untrack what is already in the index.
-- `playwright` is a devDependency that nothing imports or runs.
+- `playwright` drives `scripts/ui-smoke.mjs` and `scripts/ui-checklist.mjs`;
+  `npx playwright install chromium` once per machine.

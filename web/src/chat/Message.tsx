@@ -13,7 +13,7 @@
 import type { ReactNode } from 'react';
 
 export interface MessageProps {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   children: ReactNode;
   /** Shown in the Bench gutter; hidden by tokens in Showroom. */
   meta?: string;

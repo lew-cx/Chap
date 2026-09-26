@@ -7,6 +7,8 @@
  * interesting outcome and the reason to have a bench at all.
  */
 
+import { useState } from 'react';
+
 import type {
   GeneratedCitationReference,
   PromptCompilationTrace,
@@ -31,13 +33,60 @@ export interface RunResult {
   request: BuiltRequest;
 }
 
-export function RunInspectors({ result }: { result: RunResult }) {
+/** What one called tool returned, on its way back to the model as a `tool` turn. */
+export interface ToolResult {
+  callId: string;
+  name: string;
+  content: string;
+}
+
+/**
+ * Whether the reply is the whole reply, in the vocabulary LewLM's
+ * `finish_reason` uses. Anything unrecognized is shown as it arrived rather than
+ * being rounded to "yes".
+ */
+function completeness(result: RunResult): string {
+  // LewLM says whether anything was delivered before the failure. An engine can
+  // accept a request and die before its first token, and calling that "partial
+  // output" would describe text that does not exist.
+  if (result.error) return result.error.partial_output ? 'no — partial output' : 'no — nothing delivered';
+  switch (result.finishReason) {
+    case 'stop':
+      return 'yes';
+    case 'cancelled':
+      return 'no — stopped';
+    case 'length':
+      return 'no — token limit';
+    case 'tool_calls':
+      return 'waiting on tool results';
+    case 'error':
+      return 'no — error';
+    case null:
+      return 'unknown';
+    default:
+      return result.finishReason;
+  }
+}
+
+export function RunInspectors({
+  result,
+  onToolResults,
+}: {
+  result: RunResult;
+  /** Present only while this run is the newest and nothing is streaming. */
+  onToolResults?: ((results: ToolResult[]) => void) | undefined;
+}) {
   return (
     <div className="mt-2 flex flex-col gap-2">
       <div className="panel grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="finish reason" value={result.finishReason ?? 'unknown'} />
-        <Stat label="complete" value={result.error ? 'no — partial output' : result.finishReason === 'length' ? 'no — token limit' : 'yes'} />
+        <Stat label="complete" value={completeness(result)} />
       </div>
+      {result.finishReason === 'cancelled' && !result.error && (
+        <p className="micro-label" role="status" style={{ color: 'var(--skin-warn)' }}>
+          stopped — the text above is everything delivered before the cancel landed
+        </p>
+      )}
       {result.error && (
         <Disclosure label="stream interrupted" flagged hint={result.error.code} open>
           <p className="text-sm" style={{ color: 'var(--skin-danger)' }}>{result.error.message}</p>
@@ -48,7 +97,7 @@ export function RunInspectors({ result }: { result: RunResult }) {
       {result.structuredOutput?.requested && (
         <StructuredOutput result={result.structuredOutput} />
       )}
-      {result.toolCalls && <ToolCalls result={result.toolCalls} />}
+      {result.toolCalls && <ToolCalls result={result.toolCalls} onResults={onToolResults} />}
       {result.promptTrace && <PromptTrace trace={result.promptTrace} />}
       <RequestInspector request={result.request} />
     </div>
@@ -85,6 +134,8 @@ function StructuredOutput({ result }: { result: StructuredOutputResult }) {
   const fellBack = result.fallback_used === true;
   const invalid = result.validation?.state === 'invalid';
 
+  const valid = result.validation?.state === 'valid';
+
   return (
     <Disclosure
       label="structured output"
@@ -92,6 +143,7 @@ function StructuredOutput({ result }: { result: StructuredOutputResult }) {
       hint={`${result.enforcement ?? 'none'}${fellBack ? ' · fell back' : ''}${
         invalid ? ' · invalid' : ''
       }`}
+      open
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="enforcement" value={result.enforcement ?? '—'} />
@@ -123,24 +175,46 @@ function StructuredOutput({ result }: { result: StructuredOutputResult }) {
         </div>
       )}
 
-      {result.parsed_output !== undefined && result.parsed_output !== null && (
+      {/*
+       * The parsed object is LewLM's to vouch for, and it only does when the
+       * validation passed. Otherwise the reply above is the raw text, and what is
+       * shown here is why it is not the object that was asked for.
+       */}
+      {valid && result.parsed_output !== undefined && result.parsed_output !== null ? (
         <div className="mt-2">
           <Json value={result.parsed_output} />
         </div>
+      ) : (
+        result.validation?.message && (
+          <p className="mt-2 text-sm" style={{ color: valid ? 'var(--skin-faint)' : 'var(--skin-danger)' }}>
+            {result.validation.message}
+            {valid ? '' : ' — the reply above is the raw text'}
+          </p>
+        )
       )}
     </Disclosure>
   );
 }
 
-function ToolCalls({ result }: { result: ToolCallParseResult }) {
+function ToolCalls({
+  result,
+  onResults,
+}: {
+  result: ToolCallParseResult;
+  onResults?: ((results: ToolResult[]) => void) | undefined;
+}) {
   const calls = result.tool_calls ?? [];
   const issues = result.issues ?? [];
+  /** Keyed by position: a call id is the model's, and not every model sends one. */
+  const [answers, setAnswers] = useState<Record<number, string>>({});
 
   return (
     <Disclosure
       label="tool calls"
       flagged={result.status === 'failed' || result.status === 'partial'}
       hint={`${result.status}${calls.length ? ` · ${calls.map((call) => call.name).join(', ')}` : ''}`}
+      // Open while the model is waiting on these calls: the next step is here.
+      open={onResults != null && calls.length > 0}
     >
       {/* Parsed and validated by LewLM against the declared input schemas.
           Chap parses nothing — that was the whole argument of gap G2. */}
@@ -162,6 +236,53 @@ function ToolCalls({ result }: { result: ToolCallParseResult }) {
           {issue.code}: {issue.message}
         </p>
       ))}
+
+      {/*
+       * Chap executes nothing. The bench is the tool: type what the tool would
+       * have returned and the model continues from it. Each result goes back as
+       * a `tool` message naming its call's `call_id`, so parallel calls to one
+       * tool stay distinct.
+       */}
+      {onResults && calls.length > 0 && (
+        <form
+          className="mt-3 flex flex-col gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onResults(
+              calls.map((call, index) => ({
+                callId: call.call_id,
+                name: call.name,
+                content: answers[index] ?? '',
+              })),
+            );
+          }}
+        >
+          {calls.map((call, index) => (
+            <label key={index} className="flex flex-col gap-1">
+              <span className="micro-label">
+                result of {call.name}
+                {call.call_id ? ` · ${call.call_id}` : ''}
+              </span>
+              <textarea
+                className="field code scroll-thin min-h-16 resize-y"
+                spellCheck={false}
+                placeholder='{"temperature_c": 21, "sky": "clear"}'
+                value={answers[index] ?? ''}
+                onChange={(event) => setAnswers((current) => ({ ...current, [index]: event.target.value }))}
+              />
+            </label>
+          ))}
+          <div>
+            <button
+              type="submit"
+              className="btn"
+              disabled={calls.some((_, index) => !(answers[index] ?? '').trim())}
+            >
+              send tool {calls.length === 1 ? 'result' : 'results'}
+            </button>
+          </div>
+        </form>
+      )}
     </Disclosure>
   );
 }

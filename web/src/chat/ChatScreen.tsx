@@ -33,17 +33,18 @@ import { Labelled, Stat } from '../components/Field.tsx';
 import { FilePicker } from '../components/FilePicker.tsx';
 import { Markdown } from '../components/Markdown.tsx';
 import { lewlm } from '../lib/client.ts';
-import { useModels } from '../lib/useModels.ts';
+import { useModels, type ModelOption } from '../lib/useModels.ts';
+import { refreshPolled } from '../lib/usePolled.ts';
 import { useDictation } from '../lib/useDictation.ts';
 import { useSpeech } from '../lib/useSpeech.ts';
-import { useStructuredSupport } from '../lib/useStructuredSupport.ts';
+import { useStructuredSupport, useToolCallingSupport } from '../lib/useStructuredSupport.ts';
 import { useTokenCount } from '../lib/useTokenCount.ts';
 import { useGrounding } from '../store/grounding.ts';
 import { ContextPanel } from './ContextPanel.tsx';
 import { DictationPanel } from './DictationPanel.tsx';
 import { FormatPanel } from './FormatPanel.tsx';
 import { Message } from './Message.tsx';
-import { RunInspectors, type RunResult } from './RunInspectors.tsx';
+import { RunInspectors, type RunResult, type ToolResult } from './RunInspectors.tsx';
 import { SessionsPanel } from './SessionsPanel.tsx';
 import { SamplingPanel } from './SamplingPanel.tsx';
 import { SpeechPanel } from './SpeechPanel.tsx';
@@ -57,6 +58,7 @@ import {
   TEMPERATURE,
   type Attachment,
   type ComposerState,
+  type Turn as HistoryTurn,
 } from './request.ts';
 
 const VISIBILITIES: ReasoningVisibility[] = ['hidden', 'summarized', 'raw_model_emitted'];
@@ -72,7 +74,7 @@ type Drawer =
   | null;
 
 interface Turn {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   text: string;
   /** Attachment filenames, shown on the user turn that carried them. */
   files: string[];
@@ -81,11 +83,17 @@ interface Turn {
   usage: CompletionUsage | null;
   servingProfile: ServingProfileApplication | null;
   result: RunResult | null;
+  /** The ids this turn's request was sent under, to hold LewLM's echo against. */
+  identity: { requestId: string; correlationId: string } | null;
+  /** On a `tool` turn: the call it answers. */
+  toolCallId: string | null;
 }
 
 interface RetryDraft {
   text: string;
   attachments: Attachment[];
+  /** How many turns the failed exchange appended, all of which a retry removes. */
+  appended: number;
 }
 
 const EMPTY_TURN: Omit<Turn, 'role' | 'text'> = {
@@ -95,16 +103,54 @@ const EMPTY_TURN: Omit<Turn, 'role' | 'text'> = {
   usage: null,
   servingProfile: null,
   result: null,
+  identity: null,
+  toolCallId: null,
 };
+
+/**
+ * A turn as the model should see it again. A turn that called tools goes back
+ * with its calls as calls, and with LewLM's `remaining_text` — the reply outside
+ * the call — as its text, so a sync reply's `{"tool_calls": ...}` content is not
+ * sent twice. A tool result names the call it answers.
+ */
+function historyTurn(turn: Turn): HistoryTurn {
+  const parsed = turn.result?.toolCalls;
+  const calls = parsed?.tool_calls ?? [];
+  if (turn.role === 'assistant' && calls.length > 0) {
+    return {
+      role: 'assistant',
+      text: parsed?.remaining_text ?? turn.text,
+      toolCalls: calls.map((call) => ({
+        id: call.call_id,
+        type: 'function',
+        function: { name: call.name, arguments: call.arguments },
+      })),
+    };
+  }
+  return { role: turn.role, text: turn.text, ...(turn.toolCallId ? { toolCallId: turn.toolCallId } : {}) };
+}
 
 /**
  * A short tag for an unusable model. LewLM's `reason` is a full sentence meant
  * for a panel, not a `<select>`; the whole sentence is the option's title.
  */
-function blockedLabel(reason: string | null): string {
-  if (!reason) return 'not chat-capable';
-  if (reason.includes('requires_conversion')) return 'needs conversion';
+function blockedLabel(option: ModelOption): string {
+  if (option.engineState === 'failed' || option.engineState === 'stale') return `engine ${option.engineState}`;
+  if (!option.reason) return 'not chat-capable';
+  if (option.reason.includes('requires_conversion')) return 'needs conversion';
   return 'not chat-capable';
+}
+
+/**
+ * What is wrong with the chosen model's engine, if anything, in LewLM's terms.
+ * `null` when there is nothing to say — a packaged runtime, or an engine LewLM
+ * reports `advertised`. LewLM's reason names the engine's error and, when one
+ * would answer, the fallback alias.
+ */
+function engineNotice(option: ModelOption): string | null {
+  const engine = `${option.engineProfile ?? 'engine'}@${option.endpointId ?? '?'}`;
+  if (!option.endpointId || option.engineState === 'advertised' || option.engineState === 'packaged') return null;
+  return `${engine} is ${option.engineState ?? 'unknown'}${option.reason ? ` — ${option.reason}` : ''}`;
 }
 
 /** What the reasoning disclosure should say, given what LewLM returned. */
@@ -152,6 +198,8 @@ export function ChatScreen() {
   const [retryDraft, setRetryDraft] = useState<RetryDraft | null>(null);
   const abort = useRef<AbortController | null>(null);
   const activeRequestId = useRef<string | null>(null);
+  /** `x-lewlm-correlation-id` for every request in this conversation. */
+  const conversation = useRef(crypto.randomUUID());
   const bottom = useRef<HTMLDivElement>(null);
   /*
    * Part names must be unique within a request, and only within one. Derived
@@ -162,6 +210,9 @@ export function ChatScreen() {
   const nextUpload = useRef(0);
   const promptTokens = useTokenCount(prompt, state.model);
   const structuredSupport = useStructuredSupport(state.model);
+  const toolSupport = useToolCallingSupport(state.model);
+  /** LewLM says this model cannot call tools, so none are offered to it. */
+  const toolsBlocked = toolSupport?.support === 'none';
   const speech = useSpeech();
 
   // Leaving Chat must release an in-flight response. The visible Stop control
@@ -194,7 +245,7 @@ export function ChatScreen() {
   // selects an unusable model on this host — four of nine cannot chat.
   useEffect(() => {
     if (state.model) return;
-    const ready = models.find((option) => option.chatReady);
+    const ready = models.find((option) => option.selectable);
     if (ready) set('model', ready.id);
   }, [models, state.model]);
 
@@ -216,36 +267,43 @@ export function ChatScreen() {
     bottom.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [turns]);
 
-  async function send() {
-    const text = prompt.trim();
-    if ((!text && attachments.length === 0) || streaming || formatError || toolError) return;
-
+  /**
+   * One exchange: append `next` and an assistant turn, stream the reply into it.
+   *
+   * `next` is either the typed prompt or the results of the tools the model just
+   * called; everything after that is the same run. `draft` is what goes back to
+   * the composer if the exchange never happened.
+   */
+  async function run(next: Turn[], sentAttachments: Attachment[], draft: string) {
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
     const requestId = crypto.randomUUID();
     activeRequestId.current = requestId;
 
-    // Only completed turns are history; the pair appended below is this run.
-    const history = turns.map((turn) => ({ role: turn.role, text: turn.text }));
-    const built = buildRequest(state, history, text, attachments);
-    const files = attachments.map((attachment) => attachment.file.name);
+    // Only completed turns are history; what is appended below is this run.
+    const history = turns.map(historyTurn);
+    const built = buildRequest(
+      toolsBlocked ? { ...state, toolsText: '[]' } : state,
+      history,
+      next.map(historyTurn),
+      sentAttachments,
+    );
+    const appended = next.length + 1;
 
-    // One turn can be many requests once it is spoken — the generation plus a
-    // synthesis per sentence. They share a correlation id so LewLM's event
-    // stream shows them as one exchange rather than a dozen unrelated calls.
-    const correlationId = crypto.randomUUID();
+    // One conversation is many requests — every turn, plus a synthesis per
+    // spoken sentence. They share the conversation's correlation id, so LewLM's
+    // event stream and audit log show one exchange rather than unrelated calls.
+    const correlationId = conversation.current;
     speech.begin(correlationId);
 
-    setPrompt('');
-    setAttachments([]);
     setError(null);
     setRetryDraft(null);
     setStreaming(true);
     setTurns((current) => [
       ...current,
-      { ...EMPTY_TURN, role: 'user', text, files },
-      { ...EMPTY_TURN, role: 'assistant', text: '' },
+      ...next,
+      { ...EMPTY_TURN, role: 'assistant', text: '', identity: { requestId, correlationId } },
     ]);
 
     /** Mutate the assistant turn we just appended. */
@@ -253,6 +311,16 @@ export function ChatScreen() {
       setTurns((current) =>
         current.map((turn, index) => (index === current.length - 1 ? { ...turn, ...change } : turn)),
       );
+
+    /**
+     * LewLM marks an engine down the moment it is refused, so what the picker
+     * and the Overview show is already true; re-reading now means they show it
+     * without waiting out a poll interval.
+     */
+    const engineDown = (code: string) => {
+      if (code !== 'runtime_unavailable') return;
+      for (const path of ['/v1/models', '/v1/health', '/v1/runtime']) refreshPolled(path);
+    };
 
     try {
       const options = {
@@ -283,7 +351,7 @@ export function ChatScreen() {
             // Replace, never append — LewLM sends the whole object per token.
             patch({ reasoning: reasoningText(event.reasoning) });
             break;
-          case 'final':
+          case 'final': {
             patch({
               metadata: event.metadata,
               usage: event.usage,
@@ -298,6 +366,8 @@ export function ChatScreen() {
               },
             });
             if (event.error) {
+              // Delivered text stands and nothing is replayed: the retry below is
+              // offered, and only the user can choose it.
               setError(new LewLMApiError({
                 code: event.error.code,
                 message: event.error.message,
@@ -305,10 +375,12 @@ export function ChatScreen() {
                 details: { ...event.error.details, partial_output: event.error.partial_output, in_band: true },
                 requestId,
               }));
-              setRetryDraft({ text, attachments });
+              setRetryDraft({ text: draft, attachments: sentAttachments, appended });
+              engineDown(event.error.code);
             }
             setSamplingReport(event.metadata?.sampling ?? null);
             break;
+          }
           case 'done':
             break;
         }
@@ -330,9 +402,13 @@ export function ChatScreen() {
       // a fragment of an answer the model never finished; keeping it while the
       // prompt goes back to the composer duplicates the prompt on retry and
       // presents a truncation as if it were the reply.
-      setTurns((current) => (current.at(-1)?.role === 'assistant' ? current.slice(0, -2) : current));
-      setPrompt((current) => current || text);
-      setAttachments((current) => (current.length > 0 ? current : attachments));
+      setTurns((current) => (current.at(-1)?.role === 'assistant' ? current.slice(0, -appended) : current));
+      if (draft) setPrompt((current) => current || draft);
+      if (sentAttachments.length > 0) {
+        setAttachments((current) => (current.length > 0 ? current : sentAttachments));
+      }
+
+      if (failure instanceof LewLMApiError) engineDown(failure.code);
 
       // `chat_ready` said yes and the runtime said no. LewLM's envelope carries
       // the architecture and the underlying cause, so demote this model with a
@@ -352,7 +428,41 @@ export function ChatScreen() {
     }
   }
 
+  async function send() {
+    const text = prompt.trim();
+    if ((!text && attachments.length === 0) || streaming || formatError || toolError) return;
+    const sent = attachments;
+    setPrompt('');
+    setAttachments([]);
+    await run(
+      [{ ...EMPTY_TURN, role: 'user', text, files: sent.map((attachment) => attachment.file.name) }],
+      sent,
+      text,
+    );
+  }
+
+  /** The tools the model called have answered; let it continue. */
+  async function sendToolResults(results: ToolResult[]) {
+    if (streaming || results.length === 0) return;
+    await run(
+      results.map((result) => ({ ...EMPTY_TURN, role: 'tool' as const, text: result.content, toolCallId: result.callId })),
+      [],
+      '',
+    );
+  }
+
+  /** A new conversation: a fresh transcript under a fresh correlation id. */
+  function startOver() {
+    abort.current?.abort();
+    conversation.current = crypto.randomUUID();
+    setTurns([]);
+    setError(null);
+    setRetryDraft(null);
+  }
+
   const canSend = (prompt.trim().length > 0 || attachments.length > 0) && !formatError && !toolError;
+  const selected = models.find((option) => option.id === state.model);
+  const selectedNotice = selected ? engineNotice(selected) : null;
 
   return (
     <div className="flex h-full flex-col">
@@ -381,19 +491,29 @@ export function ChatScreen() {
                  * shown exactly as typed — rendering it would hide the asterisks
                  * and backticks that were actually sent to LewLM.
                  */}
-                {turn.role === 'user' ? (
+                {turn.role !== 'assistant' ? (
                   turn.text
                 ) : (
                   <Markdown text={turn.text || (streaming && index === turns.length - 1 ? '…' : '')} />
                 )}
               </Message>
 
-              {turn.result && <RunInspectors result={turn.result} />}
+              {turn.result && (
+                <RunInspectors
+                  result={turn.result}
+                  // Only the newest reply can be continued: answering an older
+                  // call would graft a result onto a conversation that moved on.
+                  onToolResults={
+                    index === turns.length - 1 && !streaming ? (results) => void sendToolResults(results) : undefined
+                  }
+                />
+              )}
               {turn.metadata && (
                 <RunMetadata
                   metadata={turn.metadata}
                   usage={turn.usage}
                   servingProfile={turn.servingProfile}
+                  identity={turn.identity}
                 />
               )}
             </div>
@@ -403,9 +523,11 @@ export function ChatScreen() {
             <ErrorBanner
               error={error}
               onRetry={retryDraft ? () => {
-                setTurns((current) => current.slice(0, -2));
-                setPrompt(retryDraft.text);
-                setAttachments(retryDraft.attachments);
+                setTurns((current) => current.slice(0, -retryDraft.appended));
+                // A tool continuation has no prompt to restore, and must not
+                // clear one the user has started typing since.
+                if (retryDraft.text) setPrompt(retryDraft.text);
+                if (retryDraft.attachments.length > 0) setAttachments(retryDraft.attachments);
                 setRetryDraft(null);
                 setError(null);
               } : undefined}
@@ -442,18 +564,24 @@ export function ChatScreen() {
                 <option
                   key={option.id}
                   value={option.id}
-                  disabled={!option.chatReady}
+                  disabled={!option.selectable}
                   title={[
                     option.id,
                     option.engineProfile && option.endpointId
                       ? `${option.engineProfile}@${option.endpointId} (${option.engineState ?? 'unknown'})`
                       : null,
+                    option.warmth ? option.warmth : 'not loaded',
                     option.reason,
                   ].filter(Boolean).join(' — ')}
                 >
                   {option.label}
                   {option.endpointId ? ` · ${option.engineProfile ?? 'engine'}@${option.endpointId}` : ''}
-                  {option.chatReady ? '' : ` — ${blockedLabel(option.reason)}`}
+                  {option.warmth ? ` · ${option.warmth}` : ''}
+                  {option.selectable
+                    ? option.fallbackModelId && !option.chatReady
+                      ? ` — engine ${option.engineState ?? 'down'}, answered by fallback`
+                      : ''
+                    : ` — ${blockedLabel(option)}`}
                 </option>
               ))}
             </select>
@@ -518,7 +646,26 @@ export function ChatScreen() {
           </Labelled>
         </div>
 
+        {/* The picker hides nothing it could not select; this says why the one
+            already chosen may not answer, before a request is spent on it. */}
+        {selectedNotice && (
+          <p className="numeric mb-2 text-sm" role="status" style={{ color: 'var(--skin-warn)' }}>
+            {selectedNotice}
+          </p>
+        )}
+
         <div className="mb-2 flex flex-wrap items-center gap-2">
+          {turns.length > 0 && (
+            <button
+              type="button"
+              className="chip"
+              disabled={streaming}
+              title="a new transcript under a new x-lewlm-correlation-id"
+              onClick={startOver}
+            >
+              new chat
+            </button>
+          )}
           <Toggle
             label="stream"
             on={state.stream}
@@ -599,7 +746,7 @@ export function ChatScreen() {
               label={panel}
               flagged={
                 (panel === 'format' && formatError != null) ||
-                (panel === 'tools' && toolError != null) ||
+                (panel === 'tools' && (toolError != null || (toolsBlocked && parseTools(state.toolsText).value.length > 0))) ||
                 (panel === 'speech' && speech.error != null) ||
                 (panel === 'dictation' && dictation.error != null)
               }
@@ -670,13 +817,14 @@ export function ChatScreen() {
                   set('sessionId', sessionId);
                   // The transcript on screen belongs to the previous context;
                   // keeping it would imply the model can still see it.
-                  setTurns([]);
+                  startOver();
                 }}
               />
             )}
             {drawer === 'speech' && <SpeechPanel speech={speech} />}
             {drawer === 'tools' && (
               <ToolsPanel
+                support={toolSupport}
                 source={state.toolsText}
                 choice={state.toolChoice}
                 error={toolError}
@@ -796,10 +944,12 @@ function RunMetadata({
   metadata,
   usage,
   servingProfile,
+  identity,
 }: {
   metadata: ExecutionMetadata;
   usage: CompletionUsage | null;
   servingProfile: ServingProfileApplication | null;
+  identity: Turn['identity'];
 }) {
   const timing = metadata.timing;
   const execMs = timing?.execute_milliseconds;
@@ -814,6 +964,15 @@ function RunMetadata({
       ? `${((usage.completion_tokens / execMs) * 1000).toFixed(1)}/s`
       : null;
 
+  /*
+   * What was sent against what LewLM says it received. The request id is the
+   * cancellation handle, so a mismatch would mean Stop names the wrong run.
+   */
+  const echoed =
+    identity == null
+      ? null
+      : metadata.request_id === identity.requestId && metadata.correlation_id === identity.correlationId;
+
   return (
     <div className="panel mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
       <Stat label="origin" value={metadata.result_origin ?? '—'} />
@@ -823,22 +982,30 @@ function RunMetadata({
       <Stat label="load" value={`${timing?.load_milliseconds ?? 0}ms`} />
       <Stat label="execute" value={`${execMs ?? 0}ms`} />
       <Stat label="total" value={`${timing?.total_milliseconds ?? 0}ms`} />
+      {/* `measured: false` means LewLM had no tokenizer to count with and
+          estimated; the figure is shown, labelled as what it is. */}
       <Stat
-        label="tokens"
+        label={usage && !usage.measured ? 'tokens (estimated)' : 'tokens'}
         value={usage ? `${usage.prompt_tokens}+${usage.completion_tokens}` : '—'}
       />
-      <Stat label="cached" value={usage?.cached_tokens ?? '—'} />
+      {/* Absent means the backend reports no prefix-cache counter, not zero. */}
+      {usage?.cached_tokens != null && <Stat label="cached" value={usage.cached_tokens} />}
       <Stat label="tok/s" value={rate ?? (usage ? 'unmeasured' : '—')} />
       <Stat label="batched" value={metadata.serving?.batched ? 'yes' : 'no'} />
       <Stat label="endpoint" value={metadata.model?.endpoint_id ?? 'local'} />
       <Stat label="engine profile" value={metadata.model?.engine_profile ?? '—'} />
       <Stat label="request" value={metadata.request_id.slice(0, 8)} />
+      <Stat label="correlation" value={metadata.correlation_id?.slice(0, 8) ?? '—'} />
+      <Stat label="ids echoed" value={echoed == null ? '—' : echoed ? 'match' : 'MISMATCH'} />
       {/* The profile is only ever reported on the first chunk, so this is the
           one place its status is knowable. */}
       <Stat label="profile" value={servingProfile?.status ?? '—'} />
       {metadata.routing.fallback_from_model_id && (
-        <div className="col-span-2 sm:col-span-4 text-sm" style={{ color: 'var(--skin-warn)' }}>
-          fell back from {metadata.routing.fallback_from_model_id} to {metadata.model?.resolved_model_id ?? 'another model'}: {metadata.routing.fallback_reason ?? 'no reason reported'}
+        <div className="col-span-2 sm:col-span-4 text-sm" role="status" style={{ color: 'var(--skin-warn)' }}>
+          answered by {metadata.model?.resolved_model_id ?? 'another model'}
+          {metadata.model?.endpoint_id ? ` @${metadata.model.endpoint_id}` : ''}, not the{' '}
+          {metadata.routing.fallback_from_model_id} you asked for:{' '}
+          {metadata.routing.fallback_reason ?? 'no reason reported'}
         </div>
       )}
     </div>
@@ -868,6 +1035,14 @@ function ErrorBanner({ error, onRetry }: { error: Error; onRetry?: () => void })
       <p className="mt-1 text-sm" style={{ color: 'var(--skin-ink)' }}>
         {error.message}
       </p>
+      {/* LewLM names the engine that refused it; the message alone does not. */}
+      {typeof api?.details['endpoint_id'] === 'string' && (
+        <p className="numeric mt-1">
+          engine endpoint: {api.details['endpoint_id']}
+          {typeof api.details['runtime'] === 'string' ? ` · ${api.details['runtime']}` : ''}
+          {api.details['partial_output'] === true ? ' · the text above is partial output' : ''}
+        </p>
+      )}
       {api && api.fields.length > 0 && (
         <div className="mt-2 flex flex-col gap-1">
           {api.fields.map((field, index) => (

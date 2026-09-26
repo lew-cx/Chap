@@ -28,6 +28,7 @@
     "typecheck": "tsc -b --pretty",
     "skin:check": "node scripts/skin-check.mjs",
     "ui:smoke": "node scripts/ui-smoke.mjs",
+    "ui:checklist": "node scripts/ui-checklist.mjs",
     "doctor": "node scripts/doctor.mjs"
   },
   "overrides": {

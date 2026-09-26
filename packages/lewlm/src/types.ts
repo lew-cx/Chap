@@ -38,6 +38,7 @@ export type {
   InputImagePart,
   InputTextPart,
   JSONSchemaResponseFormat,
+  MessageToolCall,
   ParsedToolCall,
   PromptCompilationTrace,
   ComponentProvenance,

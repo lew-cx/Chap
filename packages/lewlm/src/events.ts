@@ -12,9 +12,14 @@
  * backpressure control rather than a convenience — an excluded event is never
  * serialized and never sent.
  *
- * Every frame's cursor is sent back as `Last-Event-ID` after a reconnect. LewLM
+ * Every frame's cursor is sent back as `?after=` after a reconnect. LewLM
  * begins the resumed stream with `events.resumed`, including an exact lost count
  * or `null` when the cursor belongs to a previous server lifetime.
+ *
+ * `?after=` rather than `Last-Event-ID`, though LewLM reads both and allows the
+ * header cross-origin: a query parameter is a simple request, so a browser
+ * talking to LewLM directly reconnects without a preflight, and it crosses the
+ * proxy unchanged. One spelling, no extra round trip, on both routes.
  */
 
 import type { Client } from './http.ts';
@@ -73,11 +78,12 @@ function backoff(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /** Repeatable query parameters, which `RequestOptions.query` cannot express. */
-function search(filter: EventFilter | undefined): string {
+function search(filter: EventFilter | undefined, after: string | undefined): string {
   const params = new URLSearchParams();
   for (const [key, values] of Object.entries(filter ?? {})) {
     for (const value of values ?? []) params.append(key, value);
   }
+  if (after) params.set('after', after);
   const query = params.toString();
   return query ? `?${query}` : '';
 }
@@ -93,10 +99,9 @@ export async function subscribeEvents(
   while (!signal.aborted) {
     try {
       onStatus?.('connecting');
-      const res = await client.raw('GET', `/v1/events${search(filter)}`, {
+      const res = await client.raw('GET', `/v1/events${search(filter, cursor)}`, {
         accept: 'text/event-stream',
         signal,
-        headers: cursor ? { 'Last-Event-ID': cursor } : undefined,
       });
 
       onStatus?.(everOpened ? 'reconnected' : 'open');

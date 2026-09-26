@@ -12,6 +12,7 @@
 *.css   text eol=lf
 *.html  text eol=lf
 *.md    text eol=lf
+*.py    text eol=lf
 
 # Generated from LewLM's published contract by `npm run gen:types`.
 # Checked in deliberately: the diff is the record of contract drift.

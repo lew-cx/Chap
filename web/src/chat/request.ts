@@ -14,6 +14,7 @@ import {
   partTypeFor,
   type ChatCompletionRequest,
   type ChatMessage,
+  type MessageToolCall,
   type CitationContextPackage,
   type GrammarResponseFormat,
   type JSONSchemaResponseFormat,
@@ -103,8 +104,27 @@ export const INITIAL_FORMAT: FormatState = {
 };
 
 export interface Turn {
-  role: 'user' | 'assistant';
+  /** `tool` is a tool's result, sent back after the model called it. */
+  role: 'user' | 'assistant' | 'tool';
   text: string;
+  /** On an `assistant` turn: the calls it made, which later results name. */
+  toolCalls?: MessageToolCall[];
+  /** On a `tool` turn: the `call_id` of the call this result answers. */
+  toolCallId?: string;
+}
+
+/**
+ * One turn as either surface's message. A turn that only called tools has no
+ * text, and sends none: the calls are the content, and the model sees them as
+ * calls rather than as an empty reply.
+ */
+function message(turn: Turn, content: ChatMessage['content']): ChatMessage {
+  return {
+    role: turn.role,
+    ...(turn.toolCalls?.length && !turn.text ? { content: null } : { content }),
+    ...(turn.toolCalls?.length ? { tool_calls: turn.toolCalls } : {}),
+    ...(turn.toolCallId ? { tool_call_id: turn.toolCallId } : {}),
+  };
 }
 
 type ResponseFormat = JSONSchemaResponseFormat | GrammarResponseFormat | { type: 'text' };
@@ -224,10 +244,15 @@ export interface BuiltRequest {
   uploads: Upload[];
 }
 
+/**
+ * `next` is what this request adds to the conversation: the user's prompt, or
+ * the results of the tools the model just called. Attachments ride the prompt,
+ * so they are only ever attached to a trailing `user` turn.
+ */
 export function buildRequest(
   state: ComposerState,
   history: Turn[],
-  prompt: string,
+  next: Turn[],
   attachments: Attachment[],
 ): BuiltRequest {
   const sampling = compactSampling(state.sampling);
@@ -251,8 +276,9 @@ export function buildRequest(
     ...(tools.length > 0 ? { tools, tool_choice: state.toolChoice } : {}),
   };
 
-  const content = attachments.length > 0 ? contentParts(prompt, attachments) : prompt;
-  const uploads: Upload[] = attachments.map((attachment) => ({
+  const carrier = next.at(-1)?.role === 'user' ? next.length - 1 : -1;
+  const attached = carrier === -1 ? [] : attachments;
+  const uploads: Upload[] = attached.map((attachment) => ({
     uploadName: attachment.uploadName,
     file: attachment.file,
     fileName: attachment.file.name,
@@ -261,12 +287,15 @@ export function buildRequest(
   // With a session attached, resending the transcript would duplicate what
   // LewLM already stores and would bypass the session's context policy.
   const priorTurns = state.sessionId ? [] : history;
+  const turns = [
+    ...priorTurns.map((turn) => message(turn, turn.text)),
+    ...next.map((turn, index) =>
+      message(turn, index === carrier && attached.length > 0 ? contentParts(turn.text, attached) : turn.text),
+    ),
+  ];
 
   if (state.surface === 'responses') {
-    const input: ResponseInputMessage[] = [
-      ...priorTurns.map((turn) => ({ role: turn.role, content: turn.text })),
-      { role: 'user', content },
-    ];
+    const input: ResponseInputMessage[] = turns;
     return {
       endpoint: '/v1/responses',
       payload: { ...shared, input, max_output_tokens: clamped(state.maxTokens, MAX_TOKENS) },
@@ -274,10 +303,7 @@ export function buildRequest(
     };
   }
 
-  const messages: ChatMessage[] = [
-    ...priorTurns.map((turn) => ({ role: turn.role, content: turn.text })),
-    { role: 'user', content },
-  ];
+  const messages: ChatMessage[] = turns;
   return {
     endpoint: '/v1/chat/completions',
     payload: { ...shared, messages, max_tokens: clamped(state.maxTokens, MAX_TOKENS) },

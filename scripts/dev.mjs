@@ -6,7 +6,7 @@
  * and Chap counts its dependencies.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 import { NPM, npmArgs } from './npm.mjs';
 
@@ -30,10 +30,27 @@ const children = TASKS.map(({ name, args }) => {
 
 let shuttingDown = false;
 
+/**
+ * Stop a task and everything it started.
+ *
+ * Each task is npm, which starts tsx or Vite beneath it. On POSIX npm forwards
+ * the signal. On Windows `kill()` is TerminateProcess on npm alone, so the server
+ * or Vite underneath kept running — still holding its port, still proxying — and
+ * the next `npm run dev` came up beside a stale server it could not see.
+ */
+function stop(child) {
+  if (child.exitCode !== null || child.pid === undefined) return;
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+  } else {
+    child.kill('SIGTERM');
+  }
+}
+
 function shutdown(code) {
   if (shuttingDown) return;
   shuttingDown = true;
-  for (const child of children) child.kill('SIGTERM');
+  for (const child of children) stop(child);
   process.exit(code);
 }
 

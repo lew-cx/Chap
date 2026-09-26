@@ -15,9 +15,24 @@ import { usePolled } from './usePolled.ts';
 
 export type StructuredSupport = NonNullable<ModelCapabilityReport['structured_output']>;
 
-export function useStructuredSupport(modelId: string): StructuredSupport | null {
-  const { data } = usePolled<ModelCapabilityReport>(
+export type ToolCallingSupport = NonNullable<ModelCapabilityReport['tool_calling']>;
+
+/** One report answers both questions; the poller is shared by path. */
+function useCapabilities(modelId: string): ModelCapabilityReport | null {
+  return usePolled<ModelCapabilityReport>(
     modelId ? `/v1/models/${encodeURIComponent(modelId)}/capabilities` : null,
-  );
-  return data?.structured_output ?? null;
+  ).data;
+}
+
+export function useStructuredSupport(modelId: string): StructuredSupport | null {
+  return useCapabilities(modelId)?.structured_output ?? null;
+}
+
+/**
+ * Whether this model can call tools, and how: `native` (the engine emits
+ * structured calls), `prompt_guided` (LewLM teaches a format and parses it), or
+ * `none`. `null` until known, and whenever LewLM is left to route.
+ */
+export function useToolCallingSupport(modelId: string): ToolCallingSupport | null {
+  return useCapabilities(modelId)?.tool_calling ?? null;
 }

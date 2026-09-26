@@ -143,6 +143,17 @@ function release(poller: Poller, notify: () => void) {
   if (poller.snapshot.loading) poller.snapshot = IDLE;
 }
 
+/**
+ * Re-read a path now, for everyone watching it. For code that learns something
+ * changed without being the component that polls it — a chat turn refused
+ * because an engine went down says the inventory is stale, and waiting out a
+ * 30-second interval to show that is the lag this exists to remove.
+ */
+export function refreshPolled(path: string): void {
+  const poller = pollers.get(path);
+  if (poller && poller.subscribers.size > 0) void read(poller, true);
+}
+
 export function usePolled<T>(path: string | null, intervalMs = 0): Polled<T> {
   const [snapshot, setSnapshot] = useState<Snapshot>(() =>
     path ? (pollers.get(path)?.snapshot ?? { data: null, error: null, loading: true }) : IDLE,

@@ -165,7 +165,15 @@ export interface LewLMBundle {}
  */
 export interface ChatMessage {
   role?: 'system' | 'developer' | 'user' | 'assistant' | 'tool';
-  content: string | (InputTextPart | InputImagePart | InputFilePart | InputAudioPart)[];
+  content?: string | (InputTextPart | InputImagePart | InputFilePart | InputAudioPart)[] | null;
+  /**
+   * On a `tool` message: the `id` of the call this result answers.
+   */
+  tool_call_id?: string | null;
+  /**
+   * On an `assistant` message: the calls that turn made, so a later `tool` message can name one.
+   */
+  tool_calls?: MessageToolCall[] | null;
 }
 /**
  * This interface was referenced by `LewLMBundle`'s JSON-Schema
@@ -204,6 +212,35 @@ export interface InputAudioPart {
   upload_name?: string | null;
   language?: string | null;
   prompt?: string | null;
+}
+/**
+ * A call an earlier assistant turn made, as OpenAI's `message.tool_calls[]` spells it.
+ *
+ * `id` is the `call_id` LewLM reported for the call; the `tool` message that
+ * answers it names the same value as `tool_call_id`.
+ *
+ * This interface was referenced by `LewLMBundle`'s JSON-Schema
+ * via the `definition` "MessageToolCall".
+ */
+export interface MessageToolCall {
+  id: string;
+  type?: 'function';
+  function: MessageToolCallFunction;
+}
+/**
+ * This interface was referenced by `LewLMBundle`'s JSON-Schema
+ * via the `definition` "MessageToolCallFunction".
+ */
+export interface MessageToolCallFunction {
+  name: string;
+  /**
+   * The call's arguments: a JSON object, or its JSON text as OpenAI sends it.
+   */
+  arguments?:
+    | string
+    | {
+        [k: string]: unknown;
+      };
 }
 /**
  * Reusable source and chunk packages supplied by a host application.
@@ -857,7 +894,15 @@ export interface StreamErrorEnvelope {
  */
 export interface ResponseInputMessage {
   role?: 'system' | 'developer' | 'user' | 'assistant' | 'tool';
-  content: string | (InputTextPart | InputImagePart | InputFilePart | InputAudioPart)[];
+  content?: string | (InputTextPart | InputImagePart | InputFilePart | InputAudioPart)[] | null;
+  /**
+   * On a `tool` message: the `id` of the call this result answers.
+   */
+  tool_call_id?: string | null;
+  /**
+   * On an `assistant` message: the calls that turn made, so a later `tool` message can name one.
+   */
+  tool_calls?: MessageToolCall[] | null;
 }
 /**
  * This interface was referenced by `LewLMBundle`'s JSON-Schema

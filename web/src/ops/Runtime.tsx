@@ -18,6 +18,13 @@ import { usePolled } from '../lib/usePolled.ts';
 const bytes = (value: number | undefined | null): string =>
   value == null ? '—' : value > 1e9 ? `${(value / 1e9).toFixed(2)}G` : `${(value / 1e6).toFixed(1)}M`;
 
+/** `0.4.2 · 522cba4+dirty`: the version, and which source it was built from. */
+function buildLabel(build: RuntimeInfo['build'] | undefined): string {
+  if (!build) return '—';
+  const commit = build.source_commit ? ` · ${build.source_commit.slice(0, 7)}${build.source_dirty ? '+dirty' : ''}` : '';
+  return `${build.package_version}${commit}`;
+}
+
 export function Runtime() {
   const { data: info } = usePolled<RuntimeInfo>('/v1/runtime', 5000);
   const { data: stats } = usePolled<RuntimeStats>('/v1/runtime/stats', 4000);
@@ -34,15 +41,22 @@ export function Runtime() {
       <Section title="host" hint={info?.status}>
         <div className="panel grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat label="version" value={info?.version ?? '—'} />
-          <Stat label="build" value={typeof info?.build === 'string' ? info.build : '—'} />
+          <Stat label="build" value={buildLabel(info?.build)} />
           <Stat label="hostname" value={info?.hostname ?? '—'} />
           <Stat label="pid" value={info?.process_id ?? '—'} />
-          <Stat label="platform" value={String(stats?.platform ?? '—')} />
+          {/* An object, not a string. The release is kept: it is how a Linux
+              container running under WSL2 on a Windows host tells you so. */}
+          <Stat
+            label="platform"
+            value={stats?.platform ? `${stats.platform.system} ${stats.platform.machine} · ${stats.platform.release}` : '—'}
+          />
           <Stat label="policy" value={stats?.runtime_policy ?? '—'} />
           <Stat label="loaded models" value={info?.loaded_model_count ?? '—'} />
           <Stat label="active requests" value={info?.active_request_count ?? '—'} />
         </div>
       </Section>
+
+      <InstallSection install={health?.install_profiles} />
 
       <Section title="requests">
         <div className="panel grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -125,5 +139,83 @@ export function Runtime() {
         </div>
       </Section>
     </>
+  );
+}
+
+type Install = HealthResponse['install_profiles'];
+
+/**
+ * What this host can run, as LewLM reports it about itself.
+ *
+ * This is the part of the runtime tab that differs by platform. The same Chap
+ * points at a Mac with `mlx_local_backend`, a Windows box with a CPU llama.cpp
+ * wheel, or a CUDA container, and the only honest way to tell them apart is to
+ * show what LewLM found rather than to guess from a user agent.
+ */
+function InstallSection({ install }: { install: Install | undefined }) {
+  const build = install?.llamacpp_build;
+  const missing = build?.missing_cpu_features ?? [];
+  const container = install?.container;
+  const active = new Set(install?.active_profile_ids ?? []);
+
+  return (
+    <Section title="this host's install" hint={install?.recommended_profile_id ? `recommends ${install.recommended_profile_id}` : undefined}>
+      <div className="flex flex-col gap-2">
+        <div className="panel grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="llama.cpp" value={build ? (build.installed ? build.detection_state : 'not installed') : '—'} />
+          <Stat
+            label="gpu offload"
+            value={build?.gpu_offload_supported == null ? 'unknown' : build.gpu_offload_supported ? 'yes' : 'no — CPU build'}
+          />
+          <Stat label="accelerator hints" value={build?.accelerator_hints?.length ? build.accelerator_hints.join(' ') : 'none'} />
+          <Stat
+            label="container"
+            value={container ? (container.in_container ? `${container.runtime ?? 'yes'}${container.image_flavor ? ` · ${container.image_flavor}` : ''}` : 'native host') : '—'}
+          />
+          {/*
+           * The one line here that predicts a crash. A wheel built for CPU
+           * features this host lacks imports fine and dies with an illegal
+           * instruction at the first model load; LewLM compares the build's
+           * features with the host's so it can be said before that happens.
+           */}
+          {missing.length > 0 && (
+            <p className="col-span-2 sm:col-span-4 text-sm" role="alert" style={{ color: 'var(--skin-danger)' }}>
+              this llama.cpp build needs {missing.join(', ')}, which this CPU does not have — the first model load will
+              fail. Rebuild it without them (GGML_NATIVE=OFF) or install a wheel built for this host.
+            </p>
+          )}
+          {build?.system_info && (
+            <p className="numeric col-span-2 sm:col-span-4 break-all" style={{ color: 'var(--skin-faint)' }}>
+              {build.system_info}
+            </p>
+          )}
+        </div>
+
+        <Disclosure label="install profiles" hint={`${active.size} active`} open>
+          <div className="flex flex-col">
+            {(install?.profiles ?? []).map((profile) => (
+              <div key={profile.profile} className="row grid grid-cols-[minmax(0,14rem)_6rem_minmax(0,1fr)] items-baseline gap-3 py-1">
+                <span className="numeric truncate" title={profile.install_spec}>
+                  {profile.profile}
+                </span>
+                <span
+                  className="micro-label"
+                  style={{ color: profile.ready ? 'var(--skin-ok)' : profile.installed ? 'var(--skin-warn)' : 'var(--skin-faint)' }}
+                >
+                  {profile.ready ? 'ready' : profile.installed ? 'not ready' : 'absent'}
+                </span>
+                <span className="min-w-0 text-sm" title={(profile.notes ?? []).join(' ') || undefined}>
+                  {profile.summary}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Disclosure>
+
+        <Disclosure label="backend modules" hint={`${(install?.backend_inventory ?? []).filter((entry) => entry.installed).length} importable`}>
+          <Json value={install?.backend_inventory ?? []} maxHeight="18rem" />
+        </Disclosure>
+      </div>
+    </Section>
   );
 }

@@ -9,16 +9,16 @@ operations interface needs when the backend does the work.
 ```
   hand-written LewLM integration code
 
-    235  packages/lewlm/src/stream.ts     both surfaces, streaming or not, one union
-    108  packages/lewlm/src/types.ts      curated names over the generated contract
+    246  packages/lewlm/src/stream.ts     both surfaces, streaming or not, one union
+    112  packages/lewlm/src/types.ts      curated names over the generated contract
      92  packages/lewlm/src/errors.ts     one error type for everything
      84  packages/lewlm/src/http.ts       typed fetch + identity headers
-     68  packages/lewlm/src/events.ts     the /v1/events subscription, filtered
+     79  packages/lewlm/src/events.ts     the /v1/events subscription, filtered
      47  packages/lewlm/src/sse.ts        SSE reader
      26  packages/lewlm/src/index.ts
      25  packages/lewlm/src/multipart.ts  attachment parts
   -----
-    685  lewlm integration   (budget 900)
+    711  lewlm integration   (budget 900)
 ```
 
 That number is checked by `npm run loc:budget`. It buys a full chat surface,
@@ -35,11 +35,11 @@ domain code in this repo:
 
 ```
                        integration     ui      budgets
-    lewlm                      685      —      900 / none
+    lewlm                      711      —      900 / none
     module-collections         268     210     300 / 260
     module-docktizo            288    1221     340 / 1400
   -----                      -----   -----
-                             1,241   1,431     2,672 hand-written in total
+                             1,267   1,431     2,698 hand-written in total
 ```
 
 A consumer who wants a chat and operations GUI deletes two directories and four
@@ -285,6 +285,20 @@ npm run typecheck
 npm run doctor                 # can this machine run Chap at all
 ```
 
+LewLM's own Chap checklist — thirteen UI behaviours, four of which need an
+engine to go down — runs in a browser against a fixture whose engine can be
+stopped, killed and restarted from outside:
+
+```bash
+../LewLM/.venv/Scripts/python.exe scripts/lewlm-fixture.py --fallback --port 8081   # bin/python off Windows
+LEWLM_BASE_URL=http://127.0.0.1:8081 npm run dev
+npm run ui:checklist                                                                 # records docs/chap-validation.md's rows
+LEWLM_BASE_URL=http://127.0.0.1:8081 LEWLM_FIXTURE_CONTROL=http://127.0.0.1:8099 npm run proof
+```
+
+With the harness, the proof also runs the engine-down gap probes (G37, G38,
+G40). The last recorded run is [docs/chap-validation.md](docs/chap-validation.md).
+
 Both proofs read `.env`, so a correctly configured checkout proves against the
 same services the running app talks to. Without that, `npm run proof:dk` could
 not see the `DOCKTIZO_TOKEN` sitting beside it and reported five gaps DocKtizo
@@ -312,8 +326,10 @@ packages/module-*/    Everything that is not LewLM. Two exports each — ./serve
 server/               Hono. Proxies /v1 to LewLM, mounts whatever MODULES holds.
                       A byte pipe — it must never transform a payload.
 web/                  Vite + React + Tailwind v4. The showroom.
-docs/                 modules.md, lewlm-gaps.md, docktizo-gaps.md, skins.md
+docs/                 modules.md, lewlm-gaps.md, docktizo-gaps.md, skins.md,
+                      chap-validation.md, cross-platform.md
 scripts/              doctor, gen-types, gen-gaps, proof, probe, loc-budget,
                       module-check, skin-check, dev, npm (how to invoke npm on
-                      every platform, in one place)
+                      every platform, in one place), ui-smoke, ui-checklist,
+                      lewlm-fixture.py (LewLM's fake backend with engine controls)
 ```

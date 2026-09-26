@@ -21,7 +21,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 
-import type { LewLMApiError, ModelInventory } from '@chap/lewlm';
+import type { LewLMApiError, ModelInventory, RuntimeInfo } from '@chap/lewlm';
 
 import { usePolled } from './usePolled.ts';
 
@@ -34,8 +34,29 @@ export interface ModelOption {
   reason: string | null;
   endpointId: string | null;
   engineProfile: string | null;
+  /**
+   * LewLM's word: `packaged` for an in-process runtime, else the endpoint's
+   * cached inventory state (`advertised`, `stale`, `failed`, `unknown`).
+   */
   engineState: string | null;
+  /**
+   * The registered model LewLM would answer with instead, when this one's
+   * engine is down and `explicit_alias` fallback names one.
+   */
+  fallbackModelId: string | null;
   executionLocality: string | null;
+  /**
+   * Whether the picker may offer it. `chat_ready: false` or an engine LewLM
+   * reports `failed` both say no, and both keep the model listed with a reason —
+   * unless LewLM names a fallback alias that would answer, in which case asking
+   * for this model still gets a reply, and the reply says who gave it.
+   */
+  selectable: boolean;
+  /**
+   * The third of the three states LewLM keeps apart: listed is not warm. From
+   * `runtime.startup`, which is process-local and never probes an engine.
+   */
+  warmth: 'warm' | 'loading' | null;
 }
 
 /**
@@ -65,6 +86,9 @@ export function useModels(): {
   // The shared poller: five call sites read this path, and each one used to open
   // its own request.
   const { data, error, loading } = usePolled<ModelInventory>('/v1/models', 30_000);
+  // Warmth changes on a load, not by the second; the Ops tabs poll this faster
+  // and the shared poller runs at whichever subscriber asks most often.
+  const { data: runtime } = usePolled<RuntimeInfo>('/v1/runtime', 15_000);
   /** In-session demotions, layered over the inventory rather than baked into it. */
   const [demoted, setDemoted] = useState<Record<string, string>>({});
 
@@ -72,25 +96,33 @@ export function useModels(): {
     const availability = new Map(
       (data?.capability_availability ?? []).map((entry) => [entry.model_id, entry]),
     );
+    const warm = new Set((runtime?.startup?.warm_models ?? []).map((entry) => entry.model_id));
+    const loadingIds = new Set((runtime?.startup?.loading_models ?? []).map((entry) => entry.model_id));
 
     return (data?.items ?? [])
       .map((item) => {
         const status = availability.get(item.model_id);
         const failure = demoted[item.model_id];
+        const chatReady = failure ? false : (status?.chat_ready ?? false);
+        const engineState = status?.engine_state ?? null;
+        const endpointId = status?.endpoint_id ?? null;
         return {
           id: item.model_id,
           label: shortModelId(item.display_name || item.model_id),
-          chatReady: failure ? false : (status?.chat_ready ?? false),
+          chatReady,
           reason: failure ?? status?.reason ?? null,
-          endpointId: status?.endpoint_id ?? null,
+          endpointId,
           engineProfile: status?.engine_profile ?? null,
-          engineState: status?.engine_state ?? null,
+          engineState,
+          fallbackModelId: status?.fallback_model_id ?? null,
           executionLocality: status?.execution_locality ?? null,
-        };
+          selectable: (chatReady && engineState !== 'failed') || (!failure && status?.fallback_model_id != null),
+          warmth: warm.has(item.model_id) ? 'warm' : loadingIds.has(item.model_id) ? 'loading' : null,
+        } satisfies ModelOption;
       })
       // Usable first, so the default selection is a working model.
-      .sort((a, b) => Number(b.chatReady) - Number(a.chatReady));
-  }, [data, demoted]);
+      .sort((a, b) => Number(b.selectable) - Number(a.selectable));
+  }, [data, runtime, demoted]);
 
   const reportLoadFailure = useCallback((modelId: string, reason: string) => {
     setDemoted((current) => ({ ...current, [modelId]: reason }));

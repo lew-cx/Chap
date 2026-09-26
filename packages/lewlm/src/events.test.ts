@@ -6,6 +6,7 @@ import type { Client, RequestOptions } from './http.ts';
 
 test('event reconnect sends the last cursor and delivers LewLM replay markers', async () => {
   const seenOptions: RequestOptions[] = [];
+  const seenPaths: string[] = [];
   let call = 0;
   const frames = [
     'id: epoch:1\nevent: request.accepted\ndata: {"cursor":"epoch:1","type":"request.accepted"}\n\n',
@@ -14,7 +15,8 @@ test('event reconnect sends the last cursor and delivers LewLM replay markers', 
   ];
   const client: Client = {
     options: {},
-    raw: async (_method, _path, options = {}) => {
+    raw: async (_method, path, options = {}) => {
+      seenPaths.push(path);
       seenOptions.push(options);
       return new Response(frames[Math.min(call++, 1)]);
     },
@@ -32,6 +34,10 @@ test('event reconnect sends the last cursor and delivers LewLM replay markers', 
   });
 
   assert.equal(seenOptions.length, 2);
-  assert.equal(seenOptions[1]?.headers?.['Last-Event-ID'], 'epoch:1');
+  assert.equal(seenPaths[0], '/v1/events?exclude_types=token.delta');
+  // A query cursor, not `Last-Event-ID`: a direct browser connection resumes
+  // without a preflight.
+  assert.equal(seenPaths[1], '/v1/events?exclude_types=token.delta&after=epoch%3A1');
+  assert.equal(seenOptions[1]?.headers?.['Last-Event-ID'], undefined);
   assert.deepEqual(types, ['request.accepted', 'events.resumed', 'request.completed']);
 });

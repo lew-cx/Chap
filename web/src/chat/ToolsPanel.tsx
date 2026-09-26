@@ -1,4 +1,5 @@
 import { Labelled } from '../components/Field.tsx';
+import type { ToolCallingSupport } from '../lib/useStructuredSupport.ts';
 
 export function ToolsPanel({
   source,
@@ -6,7 +7,9 @@ export function ToolsPanel({
   error,
   onSource,
   onChoice,
+  support,
 }: {
+  support: ToolCallingSupport | null;
   source: string;
   choice: 'auto' | 'none' | 'required';
   error: string | null;
@@ -31,6 +34,18 @@ export function ToolsPanel({
         />
       </Labelled>
       <p className="micro-label">LewLM compiles these definitions and validates returned calls; Chap does no tool-call parsing.</p>
+      {/* LewLM's prediction for the chosen model, before a request is spent on it. */}
+      {support && (
+        <p className="text-sm" style={{ color: support.support === 'none' ? 'var(--skin-danger)' : 'var(--skin-faint)' }}>
+          {support.support === 'none'
+            ? 'this model cannot call tools — they are not sent'
+            : `${support.support === 'native' ? 'native calls' : 'prompt-guided calls'}${
+                support.parallel == null ? '' : support.parallel ? ' · parallel' : ' · one per reply'
+              }`}
+          {' — '}
+          {support.reason}
+        </p>
+      )}
       {error && <p className="numeric" style={{ color: 'var(--skin-danger)' }}>{error} — Send is disabled</p>}
     </div>
   );

@@ -50,8 +50,28 @@ const PROOF_KEYWORDS = ['bell', 'tower', 'tall'];
 const seconds = (value: number | null | undefined): string =>
   value != null ? `${value.toFixed(2)}s` : 'unknown duration';
 
-const BASE = flag('base', 'http://127.0.0.1:8080');
-const client = createClient({ baseUrl: BASE, applicationId: 'chap-proof' });
+/*
+ * The same LewLM, and the same key, that `.env` gives chap-server. The proof is
+ * run with `--env-file-if-exists=.env` for exactly this, and used to read neither:
+ * pointed elsewhere, a checkout proved against whatever held 8080 — on a Windows
+ * host with Docker Desktop, a container — and a key-protected LewLM failed every
+ * probe with 401.
+ */
+const BASE = flag('base', process.env['LEWLM_BASE_URL'] || 'http://127.0.0.1:8080');
+const client = createClient({
+  baseUrl: BASE,
+  applicationId: 'chap-proof',
+  apiKey: process.env['LEWLM_API_KEY'] || undefined,
+});
+
+/**
+ * A raw request, for probes that must see the wire rather than the client's
+ * reading of it — with the key the client would have sent.
+ */
+function lewlmFetch(url: string, init: RequestInit & { headers?: Record<string, string> } = {}): Promise<Response> {
+  const key = process.env['LEWLM_API_KEY'];
+  return fetch(url, { ...init, headers: { ...(key ? { 'x-api-key': key } : {}), ...init.headers } });
+}
 
 async function main() {
   console.log(`\nchap proof  ->  ${BASE}\n`);
@@ -71,13 +91,21 @@ async function main() {
   await check('models', async () => {
     const inventory = await client.request<ModelInventory>('GET', '/v1/models');
     if (inventory.count === 0) throw new Error('no models in registry');
-    if (modelId) return `${inventory.count} models, using ${modelId}`;
 
     // One request answers "what exists" and "what can run". Chap reads exactly
     // this and nothing else, so the proof reads it the same way.
     chatCandidates = (inventory.capability_availability ?? [])
       .filter((entry) => entry.chat_ready)
       .map((entry) => entry.model_id);
+
+    // `--model` narrows the candidates rather than skipping them. Returning
+    // early here left the list empty, which failed the load check, starved the
+    // events check of a model to run, and so reported G13 open from zero frames.
+    if (modelId) {
+      if (!chatCandidates.includes(modelId)) throw new Error(`${modelId} is not chat-ready here`);
+      chatCandidates = [modelId];
+      return `${inventory.count} models, using ${modelId}`;
+    }
 
     return `${inventory.count} models, ${chatCandidates.length} chat-ready`;
   });
@@ -668,6 +696,7 @@ async function main() {
    * once and both facts are taken off them.
    */
   let eventFrameIds = 0;
+  let eventFrames = 0;
 
   await check('event stream narrows at the server', async () => {
     if (chatCandidatesThatRan.size === 0) throw new Error('no model has run; nothing would emit events');
@@ -683,6 +712,7 @@ async function main() {
     const seen: string[] = [];
     const collecting = (async () => {
       for await (const frame of readSSE(res)) {
+        eventFrames += 1;
         if (frame.id) eventFrameIds += 1;
         if (frame.event) seen.push(frame.event);
         if (seen.filter((type) => type === 'request.completed').length > 0) break;
@@ -719,11 +749,14 @@ async function main() {
     // route read it. DocKtizo's generation stream puts its paged cursor on every
     // frame, which is the shape this wants.
     if (eventFrameIds > 0) return null;
+    // No frames at all is not evidence about cursors — it is the events check
+    // above failing, and saying "gap" would reopen a closed entry on no data.
+    if (eventFrames === 0) throw new Error('no event frames were read, so cursors were not observed');
     return 'frames carry no id:, so a reconnect has no cursor to resume from';
   });
 
   await gap('G11', 'error envelope on malformed requests', async () => {
-    const res = await fetch(`${BASE}/v1/chat/completions`, {
+    const res = await lewlmFetch(`${BASE}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ messages: 'not-a-list' }),
@@ -736,7 +769,7 @@ async function main() {
   await gap('G1', 'CORS is available', async () => {
     // Preflight is the real test: a browser POSTing JSON with Chap's audit
     // headers needs OPTIONS to succeed and the headers to be allow-listed.
-    const res = await fetch(`${BASE}/v1/chat/completions`, {
+    const res = await lewlmFetch(`${BASE}/v1/chat/completions`, {
       method: 'OPTIONS',
       headers: {
         origin: 'http://localhost:5173',
@@ -750,7 +783,7 @@ async function main() {
   });
 
   await gap('G6', 'token counting endpoint', async () => {
-    const res = await fetch(`${BASE}/v1/tokenize/count`, {
+    const res = await lewlmFetch(`${BASE}/v1/tokenize/count`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text: 'hello world' }),
@@ -786,7 +819,7 @@ async function main() {
 
   await gap('G8', 'documents.ingest accepts uploads', async () => {
     const body = Buffer.from('# Hello\n\nA note body.').toString('base64');
-    const res = await fetch(`${BASE}/v1/documents/ingest`, {
+    const res = await lewlmFetch(`${BASE}/v1/documents/ingest`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -821,7 +854,7 @@ async function main() {
   });
 
   await gap('G26', 'transcription multipart body is in the contract', async () => {
-    const contract = await fetch(`${BASE}/v1/openapi.json`);
+    const contract = await lewlmFetch(`${BASE}/v1/openapi.json`);
     if (!contract.ok) return `GET /v1/openapi.json -> ${contract.status}`;
     const document = (await contract.json()) as {
       paths?: Record<string, Record<string, { requestBody?: unknown }>>;
@@ -836,7 +869,7 @@ async function main() {
     // The same question G27 answered for voices. The accepted encodings vary by
     // runtime, so they live on the per-model voice inventory rather than as a
     // global enum on the request field.
-    const contract = await fetch(`${BASE}/v1/openapi.json`);
+    const contract = await lewlmFetch(`${BASE}/v1/openapi.json`);
     if (!contract.ok) return `GET /v1/openapi.json -> ${contract.status}`;
     const document = (await contract.json()) as {
       components?: {
@@ -849,7 +882,7 @@ async function main() {
   });
 
   await gap('G27', 'synthesis voices can be listed', async () => {
-    const contract = await fetch(`${BASE}/v1/openapi.json`);
+    const contract = await lewlmFetch(`${BASE}/v1/openapi.json`);
     if (!contract.ok) return `GET /v1/openapi.json -> ${contract.status}`;
     const document = (await contract.json()) as { paths?: Record<string, unknown> };
     if (document.paths?.['/v1/audio/voices']) return null;
@@ -857,7 +890,7 @@ async function main() {
   });
 
   await gap('G19', 'serving profiles can be listed', async () => {
-    const res = await fetch(`${BASE}/v1/serving-profiles`);
+    const res = await lewlmFetch(`${BASE}/v1/serving-profiles`);
     if (res.ok) return null;
     return `GET /v1/serving-profiles -> ${res.status}; the tuning loop has no memory in the UI`;
   });
@@ -1153,6 +1186,195 @@ async function main() {
       `${large.estimate ? ` at an estimated ${large.estimate} tokens` : ''}`
     );
   });
+
+  await gap('G34', 'a streamed native tool call is parsed by LewLM', async () => {
+    // The sync body carries LewLM's parsed, schema-validated `tool_calls`. The
+    // streaming terminal chunk should carry the same verdict; when it is null,
+    // `stream.ts` reassembles the fragments and parses them itself — the exact
+    // work G2 moved into LewLM. Read raw frames so that fallback cannot hide it.
+    if (!modelId) return 'no chat-ready model to run a tool call against';
+    const res = await client.raw('POST', '/v1/chat/completions', {
+      accept: 'text/event-stream',
+      json: {
+        model: modelId,
+        stream: true,
+        max_tokens: 128,
+        messages: [{ role: 'user', content: 'What is the weather in Oslo? Use the available tool.' }],
+        tools: [{
+          name: 'get_weather',
+          description: 'Look up the current weather for a city.',
+          input_schema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
+        }],
+      },
+    });
+    let finish: string | null = null;
+    let parsed: unknown = undefined;
+    let fragments = 0;
+    for await (const frame of readSSE(res)) {
+      if (frame.data === '[DONE]') break;
+      const chunk = JSON.parse(frame.data) as {
+        choices?: { delta?: { tool_calls?: unknown[] | null }; finish_reason?: string | null }[];
+        tool_calls?: unknown;
+      };
+      const choice = chunk.choices?.[0];
+      if (choice?.delta?.tool_calls?.length) fragments += 1;
+      if (choice?.finish_reason != null) {
+        finish = choice.finish_reason;
+        parsed = chunk.tool_calls;
+      }
+    }
+    // Only a bridge engine streams native `delta.tool_calls`. A packaged runtime
+    // emits the call as text that LewLM parses, so it passes without touching the
+    // path this entry is about.
+    if (fragments === 0) return `no native tool-call deltas on this runtime (finish ${finish}); not exercised`;
+    if (parsed) return null;
+    return `finish_reason tool_calls after ${fragments} delta fragment(s), but the terminal chunk's tool_calls is null — the client parses`;
+  });
+
+  await gap('G35', 'tool calling is advertised per model', async () => {
+    // Checklist item 2 gates the tools control on the capability report, the way
+    // the format control is gated on `structured_output`. Nothing there names
+    // tool calling, so the control cannot be gated and stays always on.
+    if (!modelId) return 'no chat-ready model to ask';
+    const report = await client.request<{
+      capabilities?: { capability: string }[];
+      [key: string]: unknown;
+    }>('GET', `/v1/models/${encodeURIComponent(modelId)}/capabilities`);
+    const named = (report.capabilities ?? []).map((entry) => entry.capability);
+    if (named.some((name) => name.includes('tool'))) return null;
+    if (Object.keys(report).some((key) => key.includes('tool'))) return null;
+    return `capabilities are [${named.join(', ')}]; nothing says whether tools are native, prompt-taught or unsupported`;
+  });
+
+  await gap('G36', 'a tool result can name the call it answers', async () => {
+    // The continuation is `assistant` (the call, as text) then `tool` (the
+    // result). With no `tool_call_id` on the message, two parallel calls to one
+    // tool cannot be told apart, and an OpenAI-compatible engine that requires
+    // the id receives none.
+    const openapi = await client.request<{
+      components?: { schemas?: Record<string, { properties?: Record<string, unknown> }> };
+    }>('GET', '/v1/openapi.json');
+    const message = openapi.components?.schemas?.['ChatMessage']?.properties ?? {};
+    if ('tool_call_id' in message) return null;
+    return `ChatMessage publishes [${Object.keys(message).join(', ')}]; no tool_call_id, and an assistant turn has no tool_calls`;
+  });
+
+  await gap('G39', 'a browser can resume events with Last-Event-ID', async () => {
+    // LewLM reads the cursor from `Last-Event-ID` or `?after=`, but only the
+    // query survives a direct browser connection: the header is not in the CORS
+    // allow-list, so the preflight of every reconnect fails. Chap sends `?after=`.
+    const res = await lewlmFetch(`${BASE}/v1/events`, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'http://localhost:5173',
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'last-event-id',
+      },
+    });
+    const allowed = (res.headers.get('access-control-allow-headers') ?? '').toLowerCase();
+    if (!res.headers.get('access-control-allow-origin')) return 'CORS off on this server; not observable (see G1)';
+    if (allowed.split(',').map((header) => header.trim()).includes('last-event-id')) return null;
+    return 'preflight for last-event-id is refused; only ?after= resumes from a browser';
+  });
+
+  /*
+   * The last two need an engine to go down, which only the fixture harness can
+   * arrange (`scripts/lewlm-fixture.py`, `--control http://127.0.0.1:8099`).
+   * They run last because they stop the engine, and they bring it back.
+   */
+  // From the environment too, because `gen:gaps` runs this with no flags.
+  const control = flag('control', process.env['LEWLM_FIXTURE_CONTROL'] || '');
+  const harness = control
+    ? await fetch(`${control}/state`).then((res) => res.json() as Promise<{
+        primary: { model: string; endpoint: string };
+        fallback: Record<string, string>;
+      }>).catch(() => null)
+    : null;
+  const engine = (verb: string) => fetch(`${control}/${verb}`, { method: 'POST' }).then((res) => res.json());
+
+  if (!harness) {
+    const why = control ? `no fixture harness at ${control}` : 'needs --control (scripts/lewlm-fixture.py)';
+    record('SKIP', 'a stream to a down engine is refused before it opens', why, 'G40');
+    record('SKIP', 'engine state follows a refused connection', why, 'G37');
+    record('SKIP', 'availability names the fallback that would serve', why, 'G38');
+  } else {
+    try {
+      await engine('engine/stop');
+
+      /*
+       * G40 goes first, because it needs the engine's *first* refusal. Since G37
+       * closed, that refusal marks the endpoint down at once, and with the
+       * fallback alias configured every later request is simply served by it.
+       * G37 then reads the state this refusal left behind.
+       */
+      const refusal = { endpoint: null as string | null };
+
+      await gap('G40', 'a stream to a down engine is refused before it opens', async () => {
+        // The sync request is a 503 naming the endpoint, as the contract says.
+        // Streamed, LewLM now waits a grace window for the first item before
+        // committing headers — but a refusal that takes longer than the window
+        // (a closed localhost port on Windows takes ~2 s) still opens a 200 and
+        // fails in-band with nothing delivered.
+        const started = performance.now();
+        const res = await client.raw('POST', '/v1/chat/completions', {
+          accept: 'text/event-stream',
+          json: { model: harness.primary.model, stream: true, messages: [{ role: 'user', content: 'hi' }], max_tokens: 4 },
+        }).catch((error: unknown) => error);
+        const took = `${((performance.now() - started) / 1000).toFixed(2)}s`;
+        if (res instanceof LewLMApiError) {
+          refusal.endpoint = String(res.details['endpoint_id'] ?? '');
+          return res.status === 503 ? null : `refused with ${res.status} ${res.code}`;
+        }
+        if (!(res instanceof Response)) throw res;
+        let inBand = '';
+        let fellBack = false;
+        for await (const frame of readSSE(res)) {
+          if (frame.data === '[DONE]') break;
+          const chunk = JSON.parse(frame.data) as {
+            error?: { code: string; partial_output?: boolean; details?: Record<string, unknown> } | null;
+            metadata?: { routing?: { fallback_from_model_id?: string | null } } | null;
+          };
+          if (chunk.metadata?.routing?.fallback_from_model_id) fellBack = true;
+          if (chunk.error) {
+            inBand = `${chunk.error.code}, partial_output:${String(chunk.error.partial_output)}`;
+            refusal.endpoint = String(chunk.error.details?.['endpoint_id'] ?? '');
+          }
+        }
+        if (!inBand) return `the stream was served${fellBack ? ' by the fallback alias' : ''}; not observable`;
+        return `headers committed after ${took} (HTTP ${res.status}), then in-band ${inBand}; the sync request is a 503`;
+      });
+
+      await gap('G37', 'engine state follows a refused connection', async () => {
+        // LewLM itself has just been refused by the endpoint, and names it.
+        // Health should not go on reporting that engine `advertised` until an
+        // inventory TTL expires — checklist item 8 reads engine state there.
+        if (!refusal.endpoint) return 'no refusal was observed; not observable';
+        const health = await client.request<HealthResponse>('GET', '/v1/health');
+        const state = (health.engines ?? []).find((entry) => entry.endpoint_id === refusal.endpoint)?.state;
+        if (state && state !== 'advertised') return null;
+        return `runtime_unavailable named ${refusal.endpoint}; health still reports it ${state ?? 'absent'}`;
+      });
+
+      await engine('rescan');
+
+      await gap('G38', 'availability names the fallback that would serve', async () => {
+        // With `explicit_alias` configured, a request for this model is served
+        // by the alias. The inventory marks it not chat-ready with a generic
+        // reason, so a picker that obeys `chat_ready` hides a model LewLM serves.
+        const alias = harness.fallback[harness.primary.model];
+        if (!alias) return 'the harness runs without --fallback; not observable';
+        const inventory = await client.request<ModelInventory>('GET', '/v1/models');
+        const entry = (inventory.capability_availability ?? []).find((item) => item.model_id === harness.primary.model);
+        if (!entry) return 'the model left the inventory';
+        if (entry.chat_ready) return null;
+        if (JSON.stringify(entry).includes(alias)) return null;
+        return `chat_ready=false, engine_state=${entry.engine_state}, reason "${entry.reason}" — no mention of ${alias}`;
+      });
+    } finally {
+      await engine('engine/start').catch(() => undefined);
+      await engine('rescan').catch(() => undefined);
+    }
+  }
 
   // --- summary ------------------------------------------------------------
 

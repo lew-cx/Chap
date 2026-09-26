@@ -3408,6 +3408,12 @@ export interface components {
             content: string;
             /** Attachments */
             attachments?: components["schemas"]["GenerateAttachment"][];
+            /** Tool Call Id */
+            tool_call_id?: string | null;
+            /** Tool Calls */
+            tool_calls?: {
+                [key: string]: unknown;
+            }[] | null;
         };
         /**
          * GeneratedCitationReference
@@ -4028,6 +4034,8 @@ export interface components {
             accelerator_hints?: string[];
             /** System Info */
             system_info?: string | null;
+            /** Missing Cpu Features */
+            missing_cpu_features?: string[] | null;
             /**
              * Detection State
              * @enum {string}
@@ -4353,6 +4361,8 @@ export interface components {
             execution_locality?: string | null;
             /** Engine State */
             engine_state?: string | null;
+            /** Fallback Model Id */
+            fallback_model_id?: string | null;
         };
         /**
          * ModelCapabilityReport
@@ -4382,6 +4392,7 @@ export interface components {
             /** Capabilities */
             capabilities?: components["schemas"]["ModelCapabilityStatus"][];
             structured_output?: components["schemas"]["ModelStructuredOutputSupport"] | null;
+            tool_calling?: components["schemas"]["ModelToolCallingSupport"] | null;
             /** Capability Evidence */
             capability_evidence?: components["schemas"]["CapabilityEvidence"][];
             /** Measured Capabilities */
@@ -4799,6 +4810,33 @@ export interface components {
             verified_hosts?: string[];
             /** Notes */
             notes?: string[];
+        };
+        /**
+         * ModelToolCallingSupport
+         * @description What a request that declares `tools` will get, before spending a generation.
+         *
+         *     Predicted by the chat runtime that would serve the request, the same one
+         *     that decides at generation time whether declared tools are forwarded to the
+         *     engine or taught in the prompt. Either way LewLM validates each call
+         *     against the declared tool's `input_schema` and reports the verdict as
+         *     `tool_calls`.
+         */
+        ModelToolCallingSupport: {
+            /** Runtime Name */
+            runtime_name?: string | null;
+            /**
+             * Support
+             * @description `native`: declared tools are forwarded to the engine, which emits structured calls (streamed as `delta.tool_calls`). `prompt_guided`: the tools are described in the prompt and LewLM parses the call from the reply text. `none`: no runtime on this host can serve chat for this model.
+             * @enum {string}
+             */
+            support: "native" | "prompt_guided" | "none";
+            /**
+             * Parallel
+             * @description Whether one reply can carry several calls. `null` when the engine decides and LewLM has not observed it.
+             */
+            parallel?: boolean | null;
+            /** Reason */
+            reason: string;
         };
         /**
          * ModelValidationResult
@@ -7515,8 +7553,23 @@ export interface components {
              * @enum {string}
              */
             role: "system" | "developer" | "user" | "assistant" | "tool";
-            /** Content */
-            content: string | (components["schemas"]["InputTextPart"] | components["schemas"]["InputImagePart"] | components["schemas"]["InputFilePart"] | components["schemas"]["InputAudioPart"])[];
+            /**
+             * Content
+             * @default null
+             */
+            content: string | (components["schemas"]["InputTextPart"] | components["schemas"]["InputImagePart"] | components["schemas"]["InputFilePart"] | components["schemas"]["InputAudioPart"])[] | null;
+            /**
+             * Tool Call Id
+             * @description On a `tool` message: the `id` of the call this result answers.
+             * @default null
+             */
+            tool_call_id: string | null;
+            /**
+             * Tool Calls
+             * @description On an `assistant` message: the calls that turn made, so a later `tool` message can name one.
+             * @default null
+             */
+            tool_calls: components["schemas"]["MessageToolCall"][] | null;
         };
         /**
          * CitationContextPackage
@@ -7607,6 +7660,37 @@ export interface components {
             type: "input_text" | "text";
             /** Text */
             text: string;
+        };
+        /**
+         * MessageToolCall
+         * @description A call an earlier assistant turn made, as OpenAI's `message.tool_calls[]` spells it.
+         *
+         *     `id` is the `call_id` LewLM reported for the call; the `tool` message that
+         *     answers it names the same value as `tool_call_id`.
+         */
+        MessageToolCall: {
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @default function
+             * @constant
+             */
+            type: "function";
+            function: components["schemas"]["MessageToolCallFunction"];
+        };
+        /** MessageToolCallFunction */
+        MessageToolCallFunction: {
+            /** Name */
+            name: string;
+            /**
+             * Arguments
+             * @description The call's arguments: a JSON object, or its JSON text as OpenAI sends it.
+             * @default {}
+             */
+            arguments: string | {
+                [key: string]: unknown;
+            };
         };
         /**
          * PromptMCPToolDefinition
@@ -7926,8 +8010,23 @@ export interface components {
              * @enum {string}
              */
             role: "system" | "developer" | "user" | "assistant" | "tool";
-            /** Content */
-            content: string | (components["schemas"]["InputTextPart"] | components["schemas"]["InputImagePart"] | components["schemas"]["InputFilePart"] | components["schemas"]["InputAudioPart"])[];
+            /**
+             * Content
+             * @default null
+             */
+            content: string | (components["schemas"]["InputTextPart"] | components["schemas"]["InputImagePart"] | components["schemas"]["InputFilePart"] | components["schemas"]["InputAudioPart"])[] | null;
+            /**
+             * Tool Call Id
+             * @description On a `tool` message: the `id` of the call this result answers.
+             * @default null
+             */
+            tool_call_id: string | null;
+            /**
+             * Tool Calls
+             * @description On an `assistant` message: the calls that turn made, so a later `tool` message can name one.
+             * @default null
+             */
+            tool_calls: components["schemas"]["MessageToolCall"][] | null;
         };
         /** ResponseCreateRequest */
         ResponseCreateRequest: {

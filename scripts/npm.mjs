@@ -7,16 +7,21 @@
  * routinely contain a space. Both traps disappear by running npm's own CLI
  * under the node process we are already inside.
  *
- * `npm_execpath` is set by npm for every script it runs, and these scripts are
- * only ever reached through `npm run`. The literal is a fallback for someone
- * invoking a file directly with `node scripts/dev.mjs`, where at least the
- * failure is visible and immediate rather than silently platform-specific.
+ * `npm_execpath` is set by npm for every script it runs. Invoked directly —
+ * `node scripts/dev.mjs` — there is none, and the `npm.cmd` literal fails on
+ * Windows with a bare `spawn EINVAL`. Node's Windows installer puts npm's CLI
+ * beside `node.exe`, so that is tried first; the literal is left for layouts
+ * that have neither.
  *
  * This lives in one file because a subtle Windows workaround copied into two
  * scripts is how one of them drifts.
  */
 
-const execpath = process.env['npm_execpath'];
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+const bundled = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
+const execpath = process.env['npm_execpath'] || (existsSync(bundled) ? bundled : undefined);
 
 /** The command to spawn, and the arguments that must precede `run`. */
 export const NPM = execpath
