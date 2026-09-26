@@ -2,6 +2,7 @@
   "name": "chap",
   "private": true,
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "type": "module",
   "description": "GUI test bench and showroom for LewLM, and for products built on it",
   "workspaces": [

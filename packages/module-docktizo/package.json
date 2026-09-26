@@ -2,6 +2,7 @@
   "name": "@chap/module-docktizo",
   "private": true,
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Optional companion: test DocKtizo, an experimental document-generation service built on LewLM, through Chap. Off unless CHAP_COMPANIONS=docktizo.",
   "exports": {

@@ -236,3 +236,7 @@ scripts/              doctor, gen-types, gen-gaps, proof, probe, loc-budget,
                       every platform, in one place), ui-smoke, ui-checklist,
                       lewlm-fixture.py (LewLM's fake backend with engine controls)
 ```
+
+## License
+
+Apache-2.0, the same as LewLM. See [LICENSE](LICENSE).

@@ -2,6 +2,7 @@
   "name": "@chap/module-collections",
   "private": true,
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Chap's own retrieval store: chunks in node:sqlite, embeddings and reranking from LewLM.",
   "exports": {
